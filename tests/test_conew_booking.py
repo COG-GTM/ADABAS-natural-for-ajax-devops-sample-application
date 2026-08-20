@@ -129,6 +129,16 @@ class AvailabilityTests(unittest.TestCase):
                 self.assertEqual(result.msg_nr, 9902)
                 self.assertEqual(result.rsp_code, 9902)
 
+    def test_unknown_customer_on_sold_out_cruise_returns_9902(self):
+        # Availability is checked before the customer FIND, as in the
+        # source: a sold-out cruise yields 9902 even for an unknown
+        # customer.
+        for conew in BOTH_VARIANTS:
+            with self.subTest(variant=conew.__name__):
+                db = make_db()
+                result = conew(db.session(), "99999999", "696")
+                self.assertEqual(result.msg_nr, 9902)
+
     def test_9902_does_not_create_a_contract(self):
         for conew in BOTH_VARIANTS:
             with self.subTest(variant=conew.__name__):

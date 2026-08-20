@@ -192,11 +192,6 @@ def conew_refactored(session, customer_in, cruise_in, booking_date=20260820,
     isn, _ = found[0]
 
     try:
-        # Validate before touching any record.
-        if not _customer_exists(session, customer_id):
-            session.backout()
-            return _finish(result, MSG_CUSTOMER_NOT_FOUND)
-
         # Fix 1: test-and-set on the held record's current value.
         cruise = session.get_held("NCCRUISE", isn)
         local_avail = int(cruise["CRUISE-STATUS"])
@@ -218,6 +213,12 @@ def conew_refactored(session, customer_in, cruise_in, booking_date=20260820,
         top_rec = session.get_held("NCCONTRACT", top_isn)
         new_id = top_rec["CONTRACT-ID"] + 1
         hooks.after_maxid_read()
+
+        # HANDLE-INPUT-DATA: like the source, the customer check runs
+        # inside the availability branch; a failure backs out everything.
+        if not _customer_exists(session, customer_id):
+            session.backout()
+            return _finish(result, MSG_CUSTOMER_NOT_FOUND)
 
         session.store("NCCONTRACT", {
             "CONTRACT-ID": new_id,
