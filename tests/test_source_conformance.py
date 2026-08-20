@@ -60,6 +60,17 @@ class ConewSourceTests(unittest.TestCase):
         et_pos = self.code.index("END TRANSACTION", store_pos)
         self.assertLess(store_pos, et_pos)
 
+    def test_empty_contract_file_guard_backs_out(self):
+        """Defensive path: if the READ (1) loop body never runs (empty
+        NCCONTRACT file), a guard after END-READ backs out so the held
+        cruise record and its buffered decrement are released."""
+        end_read_pos = self.code.index("END-READ")
+        guard = self.code.index("IF LOCAL-NEWCONTRACTID = 0", end_read_pos)
+        backout = self.code.index("BACKOUT TRANSACTION", guard)
+        end_if = self.code.index("END-IF", guard)
+        self.assertLess(guard, backout)
+        self.assertLess(backout, end_if)
+
     def test_validation_decide_block_unchanged(self):
         self.assertRegex(self.code, r"WHEN P-CONTRACT-DATA\.ID-CUSTOMER-IN")
         self.assertRegex(self.code, r"WHEN P-CONTRACT-DATA\.ID-CRUISE-IN")

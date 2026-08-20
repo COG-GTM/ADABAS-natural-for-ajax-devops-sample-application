@@ -182,6 +182,20 @@ class EdgeCaseTests(unittest.TestCase):
                 self.assertEqual(result.new_contract_id, 0)
                 self.assertEqual(len(db.files["NCCONTRACT"].records), 1)
 
+    def test_empty_contract_file_backs_out_and_releases_holds(self):
+        # Defensive path: with no NCCONTRACT records the READ (1) loop
+        # body never runs; the refactored logic must back out so the
+        # held cruise record is released and the decrement discarded.
+        db = make_db(cruise_status="5")
+        db.add_file("NCCONTRACT", [])
+        result = nm.conew_refactored(db.session(), "10000001", "196")
+        self.assertEqual(result.new_contract_id, 0)
+        self.assertEqual(db.hold_table, {})
+        status = db.session().find(
+            "NCCRUISE", "CRUISE-ID", 196)[0][1]["CRUISE-STATUS"]
+        self.assertEqual(status, "5")
+        self.assertEqual(len(db.files["NCCONTRACT"].records), 0)
+
     def test_no_holds_left_after_any_outcome(self):
         for conew in BOTH_VARIANTS:
             for customer, cruise in (("10000001", "196"),

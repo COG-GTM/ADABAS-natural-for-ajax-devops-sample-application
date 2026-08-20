@@ -139,6 +139,12 @@ contract storage are one atomic unit.
   (undoes the buffered decrement, releases all holds — no partial booking).
 * `ON ERROR` block: `BACKOUT TRANSACTION` before escaping, so an abend never
   leaves a half-booked state or dangling holds.
+* Empty-file guard: if `NCCONTRACT` contains no records, the `READ (1)` loop
+  body never executes, so neither `END TRANSACTION` nor `BACKOUT TRANSACTION`
+  would run while the cruise record sits in hold with a buffered decrement.
+  A guard after `END-READ` (`IF LOCAL-NEWCONTRACTID = 0` → `BACKOUT
+  TRANSACTION`) releases the hold and discards the decrement. Unreachable
+  with the seeded sample data, but defensive against an empty contract file.
 
 ## Root-cause survey of the codebase
 
