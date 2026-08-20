@@ -60,6 +60,18 @@ class ConewSourceTests(unittest.TestCase):
         et_pos = self.code.index("END TRANSACTION", store_pos)
         self.assertLess(store_pos, et_pos)
 
+    def test_sold_out_path_backs_out_before_9902(self):
+        """The GET places the cruise record in hold regardless of branch,
+        so the sold-out ELSE must BACKOUT TRANSACTION to release it
+        before reporting 9902 (matches the model's session.backout())."""
+        else_pos = self.code.index("ELSE", self.code.index("END-READ"))
+        backout = self.code.index("BACKOUT TRANSACTION", else_pos)
+        msg_9902 = self.code.index(
+            "MOVE 9902 TO MSG-GROUP-PARA.MSG-NR", else_pos)
+        end_if = self.code.index("END-IF", else_pos)
+        self.assertLess(backout, msg_9902)
+        self.assertLess(msg_9902, end_if)
+
     def test_empty_contract_file_guard_backs_out(self):
         """Defensive path: if the READ (1) loop body never runs (empty
         NCCONTRACT file), a guard after END-READ backs out so the held

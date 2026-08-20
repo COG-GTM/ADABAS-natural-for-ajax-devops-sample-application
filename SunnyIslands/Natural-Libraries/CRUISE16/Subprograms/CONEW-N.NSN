@@ -131,6 +131,8 @@ WHEN P-CONTRACT-DATA.ID-CRUISE-IN     = ' ' OR P-CONTRACT-DATA.ID-CRUISE-IN = '0
           END-IF
 
         ELSE
+          BACKOUT TRANSACTION    /* release the cruise record held by the
+                                 /* GET so other sessions are not blocked
           MOVE 9902 TO MSG-GROUP-PARA.MSG-NR  /*  no longer available
 
         END-IF
