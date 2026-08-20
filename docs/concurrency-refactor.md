@@ -131,12 +131,17 @@ The hold is released by the same `END TRANSACTION` that commits the new
 contract (or by `BACKOUT TRANSACTION` on any failure), so ID generation and
 contract storage are one atomic unit.
 
-## Transaction boundaries (unchanged)
+## Transaction boundaries
 
 * Success path: `STORE NCCONTRACT` → `END TRANSACTION` (commits the status
   decrement and the new contract together, releases all holds).
 * Failure path (e.g. 9918 customer not found): `BACKOUT TRANSACTION`
   (undoes the buffered decrement, releases all holds — no partial booking).
+* Sold-out path (9902): the `GET` places the cruise record in hold even when
+  no places are left (the hold is set at read time because an `UPDATE`
+  references the label), so the `ELSE` branch issues `BACKOUT TRANSACTION`
+  before reporting 9902 — otherwise the record would stay held and block
+  other sessions booking the same cruise.
 * `ON ERROR` block: `BACKOUT TRANSACTION` before escaping, so an abend never
   leaves a half-booked state or dangling holds.
 * Empty-file guard: if `NCCONTRACT` contains no records, the `READ (1)` loop
