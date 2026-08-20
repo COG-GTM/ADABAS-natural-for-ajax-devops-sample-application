@@ -143,8 +143,10 @@ contract storage are one atomic unit.
   body never executes, so neither `END TRANSACTION` nor `BACKOUT TRANSACTION`
   would run while the cruise record sits in hold with a buffered decrement.
   A guard after `END-READ` (`IF LOCAL-NEWCONTRACTID = 0` → `BACKOUT
-  TRANSACTION`) releases the hold and discards the decrement. Unreachable
-  with the seeded sample data, but defensive against an empty contract file.
+  TRANSACTION` + `MSG-NR = 9902`) releases the hold, discards the decrement,
+  and reports a defined failure code instead of a silent empty success.
+  Unreachable with the seeded sample data, but defensive against an empty
+  contract file.
 
 ## Root-cause survey of the codebase
 

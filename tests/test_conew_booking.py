@@ -189,6 +189,7 @@ class EdgeCaseTests(unittest.TestCase):
         db = make_db(cruise_status="5")
         db.add_file("NCCONTRACT", [])
         result = nm.conew_refactored(db.session(), "10000001", "196")
+        self.assertEqual(result.msg_nr, 9902)
         self.assertEqual(result.new_contract_id, 0)
         self.assertEqual(db.hold_table, {})
         status = db.session().find(

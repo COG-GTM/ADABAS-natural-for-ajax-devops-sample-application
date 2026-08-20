@@ -206,8 +206,10 @@ def conew_refactored(session, customer_in, cruise_in, booking_date=20260820,
         # idiom) so MAX+1 generation is serialized until ET/BT.
         top = session.read_descending("NCCONTRACT", "CONTRACT-ID", limit=1)
         if not top:
+            # empty-file guard: back out (release the held cruise record,
+            # discard the decrement) and report a defined failure code.
             session.backout()
-            return _finish(result, msg_nr)
+            return _finish(result, MSG_NOT_AVAILABLE)
         top_isn, top_rec = top[0]
         session.update("NCCONTRACT", top_isn, {})  # fake update -> hold
         top_rec = session.get_held("NCCONTRACT", top_isn)

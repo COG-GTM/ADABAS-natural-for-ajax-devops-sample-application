@@ -30,7 +30,7 @@ Source file: `NCCRUISE.NSD` — DB 12, file 41. Cruise catalogue: one record per
 | G | 1 | `PRICES` |  |  |  |  |
 |  | 2 | `PRICE-1W` | Packed numeric | 10.3 |  | price for one week |
 |  | 2 | `PRICE-2W` | Packed numeric | 10.3 |  | price for two weeks |
-|  | 2 | `PRICE-3W` | Packed numeric | 10.3 |  | price for three weeks DDM OUTPUT TERMINATED****** |
+|  | 2 | `PRICE-3W` | Packed numeric | 10.3 |  | price for three weeks |
 
 Descriptors (search keys): `CRUISE-ID`, `START-DATE`, `END-DATE`, `START-HARBOR`, `DESTINATION-HARBOR`, `ID-YACHT`
 
@@ -53,7 +53,7 @@ Source file: `NCCONTRA.NSD` — DB 12, file 43. Booking contracts: one record pe
 |  | 2 | `DATE-P` | Numeric (unpacked) | 8.0 |  |  |
 |  | 2 | `AMOUNT-P` | Packed numeric | 10.3 |  |  |
 |  | 1 | `ID-CUSTOMER` | Numeric (unpacked) | 8.0 | D | PERSON-ID of customer |
-|  | 1 | `ID-CRUISE` | Numeric (unpacked) | 8.0 | D | CRUISE-ID, subject of contract DDM OUTPUT TERMINATED****** |
+|  | 1 | `ID-CRUISE` | Numeric (unpacked) | 8.0 | D | CRUISE-ID, subject of contract |
 
 Descriptors (search keys): `CONTRACT-ID`, `DID-CONDITIONS`, `DATE-RESERVATION`, `DATE-BOOKING`, `DATE-CANCELLATION`, `ID-CUSTOMER`, `ID-CRUISE`
 
@@ -82,7 +82,7 @@ Source file: `NCCUSTOM.NSD` — DB 12, file 44. Customer master data, maintained
 |  | 2 | `AREA-CODE` | Alphanumeric | 6 |  |  |
 |  | 2 | `PHONE-NUMBER` | Alphanumeric | 15 |  |  |
 |  | 1 | `TIMESTAMP` | Binary | 8 |  |  |
-|  | 1 | `FIRST-NAME-1` | Unicode | 40 |  | DDM OUTPUT TERMINATED****** |
+|  | 1 | `FIRST-NAME-1` | Unicode | 40 |  |  |
 
 Descriptors (search keys): `PERSON-ID`, `SEX`, `SURNAME`, `COUNTRY`, `ZIP-CODE`, `CITY`
 
@@ -103,7 +103,7 @@ Source file: `NCYACHT.NSD` — DB 12, file 42. Yacht master data, joined by `CRL
 |  | 1 | `HEAD-ROOM` | Packed numeric | 3.2 |  | headroom in saloon in meters |
 |  | 1 | `BUNKS` | Packed numeric | 3.0 |  | number of bunks |
 |  | 1 | `L@PICTURE` | Integer | 4 |  |  |
-|  | 1 | `PICTURE` | Alphanumeric |  |  | Lob DDM OUTPUT TERMINATED****** |
+|  | 1 | `PICTURE` | Alphanumeric |  |  | Lob |
 
 Descriptors (search keys): `YACHT-ID`, `YACHT-NAME`, `YACHT-TYPE`
 

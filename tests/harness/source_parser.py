@@ -108,6 +108,9 @@ def parse_ddm(path):
             continue
         if line.startswith("*"):
             comment = line.lstrip("*").strip()
+            if "DDM OUTPUT TERMINATED" in comment:
+                remark_target = None  # export terminator, not a remark
+                continue
             if remark_target is not None and comment and not comment.startswith(
                 (">", "<", ":")
             ):
