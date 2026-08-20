@@ -70,8 +70,16 @@ WHEN P-CONTRACT-DATA.ID-CRUISE-IN     = ' ' OR P-CONTRACT-DATA.ID-CRUISE-IN = '0
         MOVE 9904 TO MSG-GROUP-PARA.MSG-NR
       END-IF
 
+      /* Concurrency-safe booking: the cruise record is read with hold
+      /* (GET after FIND, followed by UPDATE), so the availability
+      /* test-and-set is serialized across sessions. The highest
+      /* contract record is also placed in hold via a "fake update"
+      /* (same pattern as CUNEW-N) before MAX+1 id generation.
+      /* See docs/concurrency-refactor.md for details.
       R1.
       FIND NCCRUISE WITH NCCRUISE.CRUISE-ID = ID-CRUISE-IN-N
+        G1.
+        GET NCCRUISE *ISN(R1.)   /* re-read in hold: fresh CRUISE-STATUS
         COMPUTE LOCAL-AVAIL = VAL(NCCRUISE.CRUISE-STATUS)
 
 
@@ -81,10 +89,13 @@ WHEN P-CONTRACT-DATA.ID-CRUISE-IN     = ' ' OR P-CONTRACT-DATA.ID-CRUISE-IN = '0
 
           LOCAL-AVAIL := LOCAL-AVAIL - 1
           NCCRUISE.CRUISE-STATUS := LOCAL-AVAIL
-          UPDATE (R1.)
+          UPDATE (G1.)
 
 
+          R2.
           READ (1) NCCONTRACT DESCENDING BY NCCONTRACT.CONTRACT-ID
+            UPDATE (R2.)     /* fake update: hold the highest contract
+                             /* record so MAX+1 generation is serialized
 
             LOCAL-NEWCONTRACTID := NCCONTRACT.CONTRACT-ID +1
             RESET NCCONTRACT
@@ -104,7 +115,7 @@ WHEN P-CONTRACT-DATA.ID-CRUISE-IN     = ' ' OR P-CONTRACT-DATA.ID-CRUISE-IN = '0
 
               STORE NCCONTRACT
               END TRANSACTION
-              MOVE NCCONTRACT.CONTRACT-ID TO P-NEW-CONTRACTID
+              MOVE LOCAL-NEWCONTRACTID TO P-NEW-CONTRACTID
 
             ELSE
 
