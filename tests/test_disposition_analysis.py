@@ -14,6 +14,7 @@ numbers are backed by behavioural checks.
 import json
 import textwrap
 import unittest
+from unittest import mock
 
 from tools import analyze_disposition as ad
 
@@ -427,11 +428,163 @@ class ReferenceAndMarkerFixtures(unittest.TestCase):
         self.assertEqual(lines, [2, 3, 4])
 
 
+def _lib_obj(library, name, otype, src):
+    o = _obj(name, otype, src)
+    o["library"] = library
+    o["path"] = f"{library}/{name}"
+    return o
+
+
+# Same-named ``CAMSG-N`` in the presentation library and in a steplib; a
+# third copy in a library the steplib chain never reaches.
+SHADOW_OBJS = {
+    "UI/RDCRUISP": _lib_obj("UI", "RDCRUISP", "program", """\
+        DEFINE DATA LOCAL USING SHAREPDA
+        END-DEFINE
+        CALLNAT 'CAMSG-N' #A
+        CALLNAT 'SVC-N' #A
+        END
+    """),
+    "UI/CAMSG-N": _lib_obj("UI", "CAMSG-N", "subprogram", """\
+        DEFINE DATA PARAMETER USING SHAREPDA END-DEFINE
+        END
+    """),
+    "UI/SHAREPDA": _lib_obj("UI", "SHAREPDA", "parameter data area", """\
+        DEFINE DATA PARAMETER
+        1 UI-GROUP
+          2 UI-FIELD (A10)
+        END-DEFINE
+    """),
+    "STEP/CAMSG-N": _lib_obj("STEP", "CAMSG-N", "subprogram", """\
+        DEFINE DATA PARAMETER USING SHAREPDA END-DEFINE
+        END
+    """),
+    "STEP/SVC-N": _lib_obj("STEP", "SVC-N", "subprogram", """\
+        DEFINE DATA PARAMETER USING SHAREPDA END-DEFINE
+        CALLNAT 'CAMSG-N' #A
+        CALLNAT 'ORPHAN-N' #A
+        END
+    """),
+    "STEP/SHAREPDA": _lib_obj("STEP", "SHAREPDA", "parameter data area", """\
+        DEFINE DATA PARAMETER
+        1 STEP-GROUP
+          2 STEP-FIELD (A10)
+        END-DEFINE
+    """),
+    "FAR/CAMSG-N": _lib_obj("FAR", "CAMSG-N", "subprogram", """\
+        DEFINE DATA LOCAL
+        1 #X (A1)
+        END-DEFINE
+        END
+    """),
+    "FAR/ORPHAN-N": _lib_obj("FAR", "ORPHAN-N", "subprogram", """\
+        END
+    """),
+}
+
+
 class ObjectInventory(unittest.TestCase):
-    def test_same_name_in_two_libraries_is_reported_not_overwritten(self):
-        objs, shadowed = ad._objects()
-        self.assertEqual(shadowed, [])
+    def test_every_library_qualified_definition_is_kept(self):
+        objs = ad._objects()
         self.assertEqual(len(objs), 31)
+        self.assertTrue(all(k == f"{o['library']}/{o['object']}"
+                            for k, o in objs.items()))
+        self.assertEqual(ad._shadowed_objects(objs), [])
+        self.assertEqual(ad._steplibs(), ["CRUISE16"])
+
+    def test_steplibs_absent_or_unparseable_is_unknown(self):
+        self.assertIsNone(ad._steplibs(ad.REPO_ROOT / "does-not-exist"))
+        self.assertIsNone(ad._steplibs(ad.REPO_ROOT / "README.md"))
+
+    def test_shadowed_names_are_listed_with_every_definition(self):
+        self.assertEqual(ad._shadowed_objects(SHADOW_OBJS), [
+            {"object": "CAMSG-N",
+             "definitions": ["FAR/CAMSG-N", "STEP/CAMSG-N", "UI/CAMSG-N"]},
+            {"object": "SHAREPDA",
+             "definitions": ["STEP/SHAREPDA", "UI/SHAREPDA"]},
+        ])
+        labels = ad._labels(SHADOW_OBJS)
+        self.assertEqual(labels["UI/RDCRUISP"], "RDCRUISP")
+        self.assertEqual(labels["STEP/CAMSG-N"], "STEP/CAMSG-N")
+
+    def test_resolution_prefers_caller_library_then_steplib_order(self):
+        objs = SHADOW_OBJS
+        self.assertEqual(ad._find(objs, "CAMSG-N", "UI", ["STEP"]),
+                         (["UI/CAMSG-N"], "current library"))
+        self.assertEqual(ad._find(objs, "CAMSG-N", "STEP", ["STEP"]),
+                         (["STEP/CAMSG-N"], "current library"))
+        self.assertEqual(ad._find(objs, "SVC-N", "UI", ["STEP"]),
+                         (["STEP/SVC-N"], "steplib STEP"))
+        self.assertEqual(ad._find(objs, "CAMSG-N", "OTHER", ["FAR", "STEP"]),
+                         (["FAR/CAMSG-N"], "steplib FAR"))
+        # unknown steplib order: keep every other definition as a candidate
+        self.assertEqual(ad._find(objs, "CAMSG-N", "OTHER", None),
+                         (["FAR/CAMSG-N", "STEP/CAMSG-N", "UI/CAMSG-N"],
+                          "ambiguous (steplib order unknown)"))
+        self.assertEqual(ad._find(objs, "ORPHAN-N", "STEP", ["STEP"]),
+                         ([], "outside steplib chain"))
+        self.assertEqual(ad._find(objs, "NOPE", "UI", ["STEP"]),
+                         ([], "not in analyzed scope"))
+
+    def test_reference_edges_carry_resolution_and_candidates(self):
+        refs, _ = ad._references(SHADOW_OBJS, ["STEP"])
+        by = {(r["caller"], r["callee"]): r for r in refs}
+        r = by[("UI/RDCRUISP", "CAMSG-N")]
+        self.assertEqual(r["resolved"], ["UI/CAMSG-N"])
+        self.assertEqual(r["candidates"],
+                         ["FAR/CAMSG-N", "STEP/CAMSG-N", "UI/CAMSG-N"])
+        self.assertEqual(by[("STEP/SVC-N", "CAMSG-N")]["resolved"],
+                         ["STEP/CAMSG-N"])
+        r = by[("STEP/SVC-N", "ORPHAN-N")]
+        self.assertEqual((r["resolved"], r["resolution"], r["candidates"]),
+                         ([], "outside steplib chain", ["FAR/ORPHAN-N"]))
+        self.assertEqual(by[("UI/RDCRUISP", "SHAREPDA")]["resolved"],
+                         ["UI/SHAREPDA"])
+        self.assertEqual(by[("STEP/SVC-N", "SHAREPDA")]["resolved"],
+                         ["STEP/SHAREPDA"])
+
+    def test_reachability_distinguishes_reached_and_shadowed_definitions(self):
+        objs = SHADOW_OBJS
+        with mock.patch.object(ad, "UI_LIBRARY", "UI"):
+            refs, _ = ad._references(objs, ["STEP"])
+            status = {(r["library"], r["object"]): r["status"]
+                      for r in ad._reachability(objs, refs, ["STEP"])}
+            callers = {(r["library"], r["object"]): r["callers"]
+                       for r in ad._reachability(objs, refs, ["STEP"])}
+        self.assertEqual(status[("UI", "RDCRUISP")], "entry point (NJX page adapter)")
+        self.assertEqual(status[("UI", "CAMSG-N")], "reachable from UI root")
+        self.assertEqual(status[("STEP", "SVC-N")], "reachable from UI root")
+        self.assertEqual(status[("STEP", "CAMSG-N")], "reachable from UI root")
+        self.assertEqual(status[("STEP", "SHAREPDA")], "reachable from UI root")
+        self.assertEqual(status[("UI", "SHAREPDA")], "reachable from UI root")
+        self.assertEqual(
+            status[("FAR", "CAMSG-N")],
+            "shadowed: same-named object in another library is the one reached")
+        self.assertEqual(
+            status[("FAR", "ORPHAN-N")],
+            "referenced by name but outside the caller's steplib chain")
+        self.assertEqual(callers[("STEP", "CAMSG-N")], ["SVC-N"])
+        self.assertEqual(callers[("UI", "CAMSG-N")], ["RDCRUISP"])
+        self.assertEqual(callers[("FAR", "CAMSG-N")], [])
+
+    def test_ambiguous_resolution_reaches_every_candidate(self):
+        objs = {k: v for k, v in SHADOW_OBJS.items() if not k.startswith("FAR/")}
+        objs["OTHER/CALLER"] = _lib_obj("OTHER", "CALLER", "program", """\
+            CALLNAT 'CAMSG-N' #A
+            END
+        """)
+        refs, _ = ad._references(objs, None)
+        r = next(r for r in refs if r["caller"] == "OTHER/CALLER")
+        self.assertEqual(r["resolved"], ["STEP/CAMSG-N", "UI/CAMSG-N"])
+        self.assertEqual(r["resolution"], "ambiguous (steplib order unknown)")
+
+    def test_using_scope_takes_the_data_area_the_caller_actually_reaches(self):
+        refs, _ = ad._references(SHADOW_OBJS, ["STEP"])
+        scopes = ad._scopes(SHADOW_OBJS, refs)
+        self.assertEqual([s["name"] for s in scopes["UI/RDCRUISP"]], ["UI-GROUP"])
+        self.assertEqual([s["name"] for s in scopes["STEP/SVC-N"]], ["STEP-GROUP"])
+        self.assertEqual([s["owner"] for s in scopes["STEP/SVC-N"]], ["STEP/SHAREPDA"])
+
 
 
 class DispositionControlTotals(unittest.TestCase):
@@ -461,6 +614,20 @@ class DispositionControlTotals(unittest.TestCase):
             "CONTPDA", "MYPDA", "SYPDA", "YACHTPDA", "NCCUSL-P",
         })
         self.assertEqual(self.ct["standalone_programs_no_ui_path"], ["DELETECU"])
+
+    def test_every_reference_resolves_uniquely_in_sample(self):
+        self.assertEqual(self.result["steplib_chain"], ["CRUISE16"])
+        self.assertEqual(self.ct["shadowed_objects"], [])
+        self.assertEqual(self.ct["unresolved_references"], [])
+        self.assertEqual(self.ct["ambiguous_references"], [])
+        self.assertEqual(self.ct["references_across_shadowed_names"], [])
+        self.assertEqual(self.ct["definitions_not_reached_by_name_resolution"], [])
+        how = {r["resolution"] for r in self.result["references"]}
+        self.assertEqual(how, {"current library", "steplib CRUISE16"})
+        cross = {r["caller"] for r in self.result["references"]
+                 if r["resolution"] == "steplib CRUISE16"}
+        self.assertEqual(cross, {"RDCRUISP", "DELETECU"})
+        self.assertTrue(all(len(r["resolved"]) == 1 for r in self.result["references"]))
 
     def test_every_service_reachable_from_adapter(self):
         reachable = {r["object"] for r in self.result["reachability"]

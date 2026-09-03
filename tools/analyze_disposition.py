@@ -53,6 +53,15 @@ DATA_AREA_TYPES = {"local data area", "global data area", "parameter data area"}
 # The NJX page adapter is the only externally driven entry point; programs
 # (.NSP) can also be started directly from a Natural session.
 UI_ROOT = "RDCRUISP"
+UI_LIBRARY = "RDCRUISE"
+MESSAGE_CATALOG = "CAMSG-N"
+# NaturalONE project settings; <SteplibExtensions> lists the steplib chain
+# searched after the current library.
+PROJECT_FILE = REPO_ROOT / "SunnyIslands" / ".natural"
+_STEPLIB_RE = re.compile(r"<SteplibExtensions>([^<]*)</SteplibExtensions>")
+# default for ``steplibs`` arguments: read the chain from PROJECT_FILE.  Pass
+# ``None`` explicitly to analyse with an unknown steplib order.
+PROJECT_STEPLIBS = object()
 
 
 _CALL_RE = re.compile(
@@ -77,44 +86,107 @@ _UI_METHOD_RE = re.compile(r'method="([A-Za-z0-9_]+)"')
 _IDENT = r"[A-Z0-9#@$&_\-]"
 
 
+def _steplibs(project_file=PROJECT_FILE):
+    """Steplib chain configured for the NaturalONE project, in search order,
+    from ``<SteplibExtensions>1;LIB[-1,-1];…</SteplibExtensions>``.  ``None``
+    when the project file or the element is missing, i.e. the order in which
+    Natural would search other libraries is unknown."""
+    if not project_file.is_file():
+        return None
+    m = _STEPLIB_RE.search(project_file.read_text(encoding="utf-8", errors="replace"))
+    if not m:
+        return None
+    libs = []
+    for part in m.group(1).split(";"):
+        part = part.strip()
+        if not part or part.isdigit():
+            continue  # leading count / trailing empty token
+        libs.append(re.sub(r"\[.*$", "", part))
+    return libs
+
+
 def _objects():
-    """Inventory keyed by object name.  Natural resolves objects by name
-    through the steplib chain, so a name that exists in more than one library
-    is a shadowing candidate; those are returned separately instead of being
-    silently overwritten."""
+    """Inventory keyed by ``LIBRARY/OBJECT``.  Natural resolves an object by
+    bare name through the caller's library and then the steplib chain, so the
+    same name may legitimately exist in more than one library; every
+    definition is kept and ``_references`` decides which one a call reaches."""
     objs = {}
-    shadowed = []
     for path in sorted(LIB_ROOT.rglob("*")):
         otype = OBJECT_TYPES.get(path.suffix.upper())
         if not otype or not path.is_file():
             continue
         src = sp.read_source(path)
-        rel = path.relative_to(REPO_ROOT).as_posix()
         library = path.relative_to(LIB_ROOT).parts[0]
-        if path.stem in objs:
-            shadowed.append({"object": path.stem, "type": otype,
-                             "library": library, "path": rel,
-                             "shadowed_by": objs[path.stem]["path"]})
-            continue
-        objs[path.stem] = {
+        objs[f"{library}/{path.stem}"] = {
             "object": path.stem,
             "type": otype,
             "library": library,
-            "path": rel,
+            "path": path.relative_to(REPO_ROOT).as_posix(),
             "lines": len(src.splitlines()),
             "executable_lines": (
                 len(_executable_lines(src)) if otype in CODE_TYPES else None
             ),
             "_src": src,
         }
-    return objs, shadowed
+    return objs
 
 
-def _references(objs):
-    """Static literal call/include/using references per object."""
+def _labels(objs):
+    """Display name per inventory key: the bare object name when it is unique
+    across libraries, else ``LIBRARY/OBJECT``."""
+    count = Counter(o["object"] for o in objs.values())
+    return {k: (o["object"] if count[o["object"]] == 1 else k)
+            for k, o in objs.items()}
+
+
+def _shadowed_objects(objs):
+    """Object names defined in more than one library."""
+    by_name = {}
+    for k, o in objs.items():
+        by_name.setdefault(o["object"], []).append(k)
+    return [{"object": n, "definitions": sorted(ks)}
+            for n, ks in sorted(by_name.items()) if len(ks) > 1]
+
+
+def _find(objs, name, library=None, steplibs=None):
+    """Resolve bare ``name`` as Natural would for a caller in ``library``:
+    the caller's own library first, then the steplib chain.  Returns
+    ``(keys, resolution)`` where ``keys`` are the inventory keys the call may
+    reach and ``resolution`` is one of ``current library``, ``steplib LIB``,
+    ``ambiguous (steplib order unknown)``, ``outside steplib chain`` or
+    ``not in analyzed scope``.  Candidates in libraries the chain does not
+    reach are still reported so shadowing is visible."""
+    candidates = {o["library"]: k for k, o in objs.items() if o["object"] == name}
+    if not candidates:
+        return [], "not in analyzed scope"
+    if library in candidates:
+        return [candidates[library]], "current library"
+    if steplibs is None:
+        # no configured order: every other definition may be the one reached
+        return sorted(candidates.values()), "ambiguous (steplib order unknown)"
+    for lib in steplibs:
+        if lib in candidates:
+            return [candidates[lib]], f"steplib {lib}"
+    return [], "outside steplib chain"
+
+
+def _references(objs, steplibs=PROJECT_STEPLIBS):
+    """Static literal call/include/using references per object.  ``callee`` is
+    the name as written; ``resolved`` lists the inventory keys the reference
+    reaches (see ``_find``) and ``candidates`` every same-named definition."""
+    if steplibs is PROJECT_STEPLIBS:
+        steplibs = _steplibs()
     refs = []
     dynamic = []
-    for name, o in objs.items():
+
+    def add(caller, o, stmt, callee, lineno):
+        keys, how = _find(objs, callee, o["library"], steplibs)
+        refs.append({"caller": caller, "statement": stmt, "callee": callee,
+                     "line": lineno, "resolved": keys, "resolution": how,
+                     "candidates": sorted(k for k, c in objs.items()
+                                          if c["object"] == callee)})
+
+    for key, o in objs.items():
         if o["type"] not in CODE_TYPES | DATA_AREA_TYPES:
             continue
         for lineno, raw in enumerate(o["_src"].splitlines(), 1):
@@ -129,61 +201,87 @@ def _references(objs):
                 if stmt == "PERFORM":
                     continue  # inline subroutines, not objects
                 if target:
-                    refs.append({"caller": name, "statement": stmt,
-                                 "callee": target, "line": lineno})
+                    add(key, o, stmt, target, lineno)
                 elif bare and stmt == "INCLUDE":
-                    refs.append({"caller": name, "statement": stmt,
-                                 "callee": bare, "line": lineno})
+                    add(key, o, stmt, bare, lineno)
                 elif bare:
-                    dynamic.append({"caller": name, "statement": stmt,
+                    dynamic.append({"caller": key, "statement": stmt,
                                     "operand": bare, "line": lineno})
             for m in _USING_RE.finditer(code):
-                refs.append({"caller": name, "statement": "USING",
-                             "callee": m.group(1), "line": lineno})
+                add(key, o, "USING", m.group(1), lineno)
     return refs, dynamic
 
 
-def _reachability(objs, refs):
+def _root_key(objs, steplibs=PROJECT_STEPLIBS):
+    """Inventory key of the UI entry point (a program started by name from
+    the presentation library, so its own library wins over steplibs)."""
+    if steplibs is PROJECT_STEPLIBS:
+        steplibs = _steplibs()
+    keys, _ = _find(objs, UI_ROOT, UI_LIBRARY, steplibs)
+    if not keys:
+        keys = [k for k, o in objs.items() if o["object"] == UI_ROOT]
+    return keys[0] if keys else None
+
+
+def _reachability(objs, refs, steplibs=PROJECT_STEPLIBS):
+    """One row per non-DDM definition (``object`` is the bare name, ``key``
+    the library-qualified one) with its callers and reachability status."""
+    labels = _labels(objs)
+    root = _root_key(objs, steplibs)
     edges = {}
     for r in refs:
-        edges.setdefault(r["caller"], set()).add(r["callee"])
+        edges.setdefault(r["caller"], set()).update(r["resolved"])
     reachable = set()
-    stack = [UI_ROOT]
+    stack = [root] if root else []
     while stack:
         n = stack.pop()
         if n in reachable:
             continue
         reachable.add(n)
         stack.extend(edges.get(n, ()))
-    referenced = {r["callee"] for r in refs}
+    referenced = {k for r in refs for k in r["resolved"]}
+    # names whose references reached some definition vs. none at all
+    named_resolved = {r["callee"] for r in refs if r["resolved"]}
+    named_unresolved = {r["callee"] for r in refs if not r["resolved"]}
     rows = []
-    for name, o in objs.items():
+    for key, o in objs.items():
         if o["type"] == "DDM":
             continue
-        callers = sorted({r["caller"] for r in refs if r["callee"] == name})
-        if name == UI_ROOT:
+        callers = sorted({labels[r["caller"]] for r in refs if key in r["resolved"]})
+        if key == root:
             status = "entry point (NJX page adapter)"
-        elif name in reachable:
+        elif key in reachable:
             status = "reachable from UI root"
         elif o["type"] == "program":
             status = "standalone program; no UI path"
-        elif name in referenced:
+        elif key in referenced:
             status = "referenced only from unreachable code"
+        elif o["object"] in named_resolved:
+            status = "shadowed: same-named object in another library is the one reached"
+        elif o["object"] in named_unresolved:
+            status = "referenced by name but outside the caller's steplib chain"
         else:
             status = "unreferenced in analyzed scope"
-        rows.append({"object": name, "type": o["type"],
+        rows.append({"object": o["object"], "key": key, "type": o["type"],
                      "library": o["library"], "callers": callers,
                      "status": status})
     return rows
 
 
-def _message_codes(objs):
-    camsg = sp.camsg_codes(objs["CAMSG-N"]["_src"])
+def _message_codes(objs, steplibs=PROJECT_STEPLIBS):
+    if steplibs is PROJECT_STEPLIBS:
+        steplibs = _steplibs()
+    labels = _labels(objs)
+    # the catalog the UI adapter's CALLNAT 'CAMSG-N' actually reaches
+    keys, _ = _find(objs, MESSAGE_CATALOG, UI_LIBRARY, steplibs)
+    catalog_src = objs[keys[0]]["_src"] if keys else ""
+    camsg = sp.camsg_codes(catalog_src)
     emitted = {}
     commented = []
-    for name, o in objs.items():
+    for key, o in objs.items():
         if o["type"] not in CODE_TYPES:
             continue
+        name = labels[key]
         for code in sp.message_codes(o["_src"]):
             emitted.setdefault(code, []).append(name)
         for lineno, raw in enumerate(o["_src"].splitlines(), 1):
@@ -194,7 +292,7 @@ def _message_codes(objs):
                     commented.append({"object": name, "line": lineno,
                                       "code": int(m.group(1))})
     texts = {}
-    for raw in objs["CAMSG-N"]["_src"].splitlines():
+    for raw in catalog_src.splitlines():
         m = re.search(r"VALUE\s+(\d{4})\s+COMPRESS\s+'([^']*)'", raw)
         if m:
             texts.setdefault(int(m.group(1)), []).append(m.group(2).strip())
@@ -269,18 +367,21 @@ def _structures(src, owner):
 
 def _scopes(objs, refs):
     """Visible level-1 structures per code object: inline declarations plus
-    every ``USING``-referenced data area (PDA / LDA / GDA)."""
-    declared = {n: _structures(o["_src"], n) for n, o in objs.items()
+    every ``USING``-referenced data area (PDA / LDA / GDA), resolved through
+    the caller's library and steplib chain.  Structures are owned by the
+    inventory key of the object that declares them."""
+    declared = {k: _structures(o["_src"], k) for k, o in objs.items()
                 if o["type"] in CODE_TYPES | DATA_AREA_TYPES}
     scopes = {}
-    for name, o in objs.items():
+    for key, o in objs.items():
         if o["type"] not in CODE_TYPES:
             continue
-        visible = list(declared.get(name, []))
+        visible = list(declared.get(key, []))
         for r in refs:
-            if r["caller"] == name and r["statement"] == "USING":
-                visible += declared.get(r["callee"], [])
-        scopes[name] = visible
+            if r["caller"] == key and r["statement"] == "USING":
+                for k in r["resolved"]:
+                    visible += declared.get(k, [])
+        scopes[key] = visible
     return scopes
 
 
@@ -509,6 +610,7 @@ def _ddm_field_usage(objs, refs):
     reference it *through one of those views*.  A textual match on a field
     name that resolves to a PDA, LDA or GDA structure of the same name is not
     credited as database usage."""
+    labels = _labels(objs)
     scopes = _scopes(objs, refs)
     stmt_lines = {n: _statement_lines(o["_src"]) for n, o in objs.items()
                   if o["type"] in CODE_TYPES}
@@ -529,12 +631,12 @@ def _ddm_field_usage(objs, refs):
                          if s["view_of"] == file_name
                          and any(fn == f.name for fn, *_ in s["fields"])]
                 for s in views:
-                    exposed.add(f"{s['owner']}.{s['name']}")
+                    exposed.add(f"{labels[s['owner']]}.{s['name']}")
                     key = (s["owner"], s["name"], f.name)
                     if implicit[obj][key + ("read",)] or implicit[obj][key + ("assign",)]:
-                        users.add(obj)
+                        users.add(labels[obj])
                     if implicit[obj][key + ("reset",)]:
-                        reset_in.add(obj)
+                        reset_in.add(labels[obj])
                 if not views:
                     continue
                 for line in stmt_lines[obj]:
@@ -544,9 +646,9 @@ def _ddm_field_usage(objs, refs):
                             continue
                         via_view = [h for h in hits if h["view_of"] == file_name]
                         if via_view and len(hits) == 1:
-                            users.add(obj)
+                            users.add(labels[obj])
                         elif via_view:
-                            ambiguous_in.add(obj)
+                            ambiguous_in.add(labels[obj])
             rows.append({
                 "file": file_name, "field": f.name, "format": f.fmt,
                 "length": f.length, "kind": kind,
@@ -567,10 +669,12 @@ def _unused_level1_vars(objs):
     """Level-1 locals whose only occurrence is their own declaration.  For a
     level-1 group the children are checked too, so a group whose members are
     used by qualified or unqualified name is not reported."""
+    labels = _labels(objs)
     rows = []
-    for name, o in objs.items():
+    for key, o in objs.items():
         if o["type"] not in {"subprogram", "program"}:
             continue
+        name = labels[key]
         code = "\n".join(sp.strip_comments(o["_src"]))
         fields = list(_data_fields(o["_src"]))
         for i, (level, var, is_group) in enumerate(fields):
@@ -594,11 +698,12 @@ def _pda_field_population(objs, refs):
     """For every PDA field: is it ever assigned / read outside DEFINE DATA and
     CALLNAT parameter lists?  Catches contracts that are passed but never
     populated (declared-only interface fields)."""
+    labels = _labels(objs)
     scopes = _scopes(objs, refs)
     stmt_lines = {n: _statement_lines(o["_src"]) for n, o in objs.items()
                   if o["type"] in CODE_TYPES}
     implicit = {n: _implicit_ops(scopes[n], stmt_lines[n]) for n in stmt_lines}
-    used_pdas = {r["callee"] for r in refs if r["statement"] == "USING"}
+    used_pdas = {k for r in refs if r["statement"] == "USING" for k in r["resolved"]}
     rows = []
     for name, o in objs.items():
         if o["type"] != "parameter data area" or name not in used_pdas:
@@ -621,7 +726,7 @@ def _pda_field_population(objs, refs):
                     assigned += by_name_assigns
                     group_resets += resets
                     if by_name_reads or by_name_assigns or resets:
-                        users.add(obj)
+                        users.add(labels[obj])
                     for line in stmt_lines[obj]:
                         for q, start, end in _occurrences(line, field):
                             res = _resolve(q, field, scope, line)
@@ -633,11 +738,11 @@ def _pda_field_population(objs, refs):
                                 ambiguous += 1
                                 continue
                             hits += 1
-                            users.add(obj)
+                            users.add(labels[obj])
                             if _is_assignment(line, start, end):
                                 assigned += 1
                 rows.append({
-                    "pda": name, "structure": s["name"], "field": field,
+                    "pda": labels[name], "structure": s["name"], "field": field,
                     "statement_references": hits,
                     "assignments": assigned,
                     "reads": hits - assigned,
@@ -649,34 +754,37 @@ def _pda_field_population(objs, refs):
 
 
 def _commented_statements(objs):
+    labels = _labels(objs)
     rows = []
-    for name, o in objs.items():
+    for key, o in objs.items():
         if o["type"] not in CODE_TYPES | DATA_AREA_TYPES:
             continue
         for lineno, raw in enumerate(o["_src"].splitlines(), 1):
             if _COMMENTED_STMT_RE.match(raw) and not raw.strip().startswith(
                     ("* >", "* :", "* <", "/**")):
-                rows.append({"object": name, "line": lineno,
+                rows.append({"object": labels[key], "line": lineno,
                              "text": raw.strip()[:90]})
     return rows
 
 
 def _markers(objs):
+    labels = _labels(objs)
     rows = []
-    for name, o in objs.items():
+    for key, o in objs.items():
         for lineno, raw in enumerate(o["_src"].splitlines(), 1):
             if raw.strip().startswith(("* >", "* :", "* <")):
                 continue
             if _MARKER_RE.search(raw):
-                rows.append({"object": name, "line": lineno,
+                rows.append({"object": labels[key], "line": lineno,
                              "text": raw.strip()[:90]})
     return rows
 
 
-def _ui_events(objs):
+def _ui_events(objs, steplibs=PROJECT_STEPLIBS):
     xml = sp.read_source(UI_XML)
     methods = _UI_METHOD_RE.findall(xml)
-    adapter = "\n".join(sp.strip_comments(objs[UI_ROOT]["_src"]))
+    root = _root_key(objs, steplibs)
+    adapter = "\n".join(sp.strip_comments(objs[root]["_src"])) if root else ""
     rows = []
     for m in sorted(set(methods)):
         handled = bool(re.search(r"VALUE\s+U?'(?:[a-z]+\.)?" + re.escape(m) + r"'", adapter))
@@ -686,25 +794,33 @@ def _ui_events(objs):
 
 
 def analyze():
-    objs, shadowed = _objects()
-    refs, dynamic = _references(objs)
+    objs = _objects()
+    steplibs = _steplibs()
+    refs, dynamic = _references(objs, steplibs)
+    labels = _labels(objs)
     result = {
         "scope": "SunnyIslands/Natural-Libraries (static analysis; candidates only)",
+        "steplib_chain": steplibs,
         "inventory": [
-            {k: v for k, v in o.items() if not k.startswith("_")}
-            for o in objs.values()
+            {"key": key, "label": labels[key],
+             **{k: v for k, v in o.items() if not k.startswith("_")}}
+            for key, o in objs.items()
         ],
-        "shadowed_objects": shadowed,
-        "references": refs,
-        "dynamic_invocations": dynamic,
-        "reachability": _reachability(objs, refs),
-        "message_codes": _message_codes(objs),
+        "shadowed_objects": _shadowed_objects(objs),
+        "references": [
+            {**r, "caller": labels[r["caller"]]} for r in refs
+        ],
+        "dynamic_invocations": [
+            {**d, "caller": labels[d["caller"]]} for d in dynamic
+        ],
+        "reachability": _reachability(objs, refs, steplibs),
+        "message_codes": _message_codes(objs, steplibs),
         "ddm_field_usage": _ddm_field_usage(objs, refs),
         "unused_level1_variables": _unused_level1_vars(objs),
         "pda_field_population": _pda_field_population(objs, refs),
         "commented_out_statements": _commented_statements(objs),
         "markers": _markers(objs),
-        "ui_events": _ui_events(objs),
+        "ui_events": _ui_events(objs, steplibs),
     }
     result["control_totals"] = control_totals(result)
     return result
@@ -724,10 +840,13 @@ def control_totals(result):
         f"{r['file']}.{r['field']}" for r in never_used_fields
         if r["cleared_by_view_reset_in"]
     ]
-    unref_objects = [r["object"] for r in result["reachability"]
+    labels = {o["key"]: o["label"] for o in result["inventory"]}
+    unref_objects = [labels[r["key"]] for r in result["reachability"]
                      if r["status"] == "unreferenced in analyzed scope"]
-    standalone = [r["object"] for r in result["reachability"]
+    standalone = [labels[r["key"]] for r in result["reachability"]
                   if r["status"] == "standalone program; no UI path"]
+    shadowed_defs = [labels[r["key"]] for r in result["reachability"]
+                     if r["status"].startswith(("shadowed", "referenced by name"))]
     never_populated = [
         f"{r['pda']}.{r['field']}" for r in result["pda_field_population"]
         if r["assignments"] == 0
@@ -741,11 +860,21 @@ def control_totals(result):
         "code_objects": sum(1 for o in result["inventory"]
                             if o["type"] in CODE_TYPES),
         "shadowed_objects": sorted(
-            f"{r['library']}/{r['object']}" for r in result["shadowed_objects"]),
+            d for r in result["shadowed_objects"] for d in r["definitions"]),
         "static_references": len(result["references"]),
+        "unresolved_references": sorted({
+            f"{r['caller']} -> {r['callee']} ({r['resolution']})"
+            for r in result["references"] if not r["resolved"]}),
+        "ambiguous_references": sorted({
+            f"{r['caller']} -> {r['callee']}"
+            for r in result["references"] if len(r["resolved"]) > 1}),
+        "references_across_shadowed_names": sorted({
+            f"{r['caller']} -> {r['callee']} ({r['resolution']})"
+            for r in result["references"] if len(r["candidates"]) > 1}),
         "dynamic_invocations": len(result["dynamic_invocations"]),
         "unreferenced_objects": sorted(unref_objects),
         "standalone_programs_no_ui_path": sorted(standalone),
+        "definitions_not_reached_by_name_resolution": sorted(shadowed_defs),
         "message_codes_cataloged": len(mc["catalog"]),
         "message_codes_emitted": len(mc["emitted"]),
         "message_codes_cataloged_never_emitted": len(mc["cataloged_never_emitted"]),
@@ -796,9 +925,19 @@ def render_markdown(result):
     L += _md_table(["Measure", "Value"], [
         ("Natural objects analyzed", ct["objects"]),
         ("Code objects (subprogram / program / copycode)", ct["code_objects"]),
+        ("Steplib chain searched after the caller's library (`SunnyIslands/.natural`)",
+         " → ".join(result["steplib_chain"]) if result["steplib_chain"] else "not configured"),
         ("Object names present in more than one library (shadowing)",
          ", ".join(ct["shadowed_objects"]) or "none"),
         ("Static literal references (CALLNAT/FETCH/INCLUDE/USING)", ct["static_references"]),
+        ("References that reach no object in the analyzed scope / steplib chain",
+         ", ".join(ct["unresolved_references"]) or "none"),
+        ("References that could reach more than one same-named object",
+         ", ".join(ct["ambiguous_references"]) or "none"),
+        ("References to a name defined in more than one library (which one wins)",
+         ", ".join(ct["references_across_shadowed_names"]) or "none"),
+        ("Definitions that a same-named reference does not reach (shadowed / outside chain)",
+         ", ".join(ct["definitions_not_reached_by_name_resolution"]) or "none"),
         ("Dynamic invocations (unresolvable statically)", ct["dynamic_invocations"]),
         ("Objects unreferenced in analyzed scope", ", ".join(ct["unreferenced_objects"]) or "none"),
         ("Standalone programs with no UI path", ", ".join(ct["standalone_programs_no_ui_path"]) or "none"),
@@ -828,8 +967,9 @@ def render_markdown(result):
         for r in result["reachability"]
     ])
     L += ["", "## Static reference edges", ""]
-    L += _md_table(["Caller", "Statement", "Callee", "Line"], [
-        (f"`{r['caller']}`", r["statement"], f"`{r['callee']}`", r["line"])
+    L += _md_table(["Caller", "Statement", "Callee", "Line", "Resolves to"], [
+        (f"`{r['caller']}`", r["statement"], f"`{r['callee']}`", r["line"],
+         (", ".join(f"`{k}`" for k in r["resolved"]) or "—") + f" ({r['resolution']})")
         for r in result["references"]
     ])
     if result["dynamic_invocations"]:

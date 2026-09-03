@@ -1,7 +1,12 @@
 {
   "scope": "SunnyIslands/Natural-Libraries (static analysis; candidates only)",
+  "steplib_chain": [
+    "CRUISE16"
+  ],
   "inventory": [
     {
+      "key": "CRUISE16/ERRLOG-I",
+      "label": "ERRLOG-I",
       "object": "ERRLOG-I",
       "type": "copycode",
       "library": "CRUISE16",
@@ -10,6 +15,8 @@
       "executable_lines": 0
     },
     {
+      "key": "CRUISE16/NCCONTRA",
+      "label": "NCCONTRA",
       "object": "NCCONTRA",
       "type": "DDM",
       "library": "CRUISE16",
@@ -18,6 +25,8 @@
       "executable_lines": null
     },
     {
+      "key": "CRUISE16/NCCRUISE",
+      "label": "NCCRUISE",
       "object": "NCCRUISE",
       "type": "DDM",
       "library": "CRUISE16",
@@ -26,6 +35,8 @@
       "executable_lines": null
     },
     {
+      "key": "CRUISE16/NCCUSTOM",
+      "label": "NCCUSTOM",
       "object": "NCCUSTOM",
       "type": "DDM",
       "library": "CRUISE16",
@@ -34,6 +45,8 @@
       "executable_lines": null
     },
     {
+      "key": "CRUISE16/NCYACHT",
+      "label": "NCYACHT",
       "object": "NCYACHT",
       "type": "DDM",
       "library": "CRUISE16",
@@ -42,6 +55,8 @@
       "executable_lines": null
     },
     {
+      "key": "CRUISE16/NCDATA-L",
+      "label": "NCDATA-L",
       "object": "NCDATA-L",
       "type": "local data area",
       "library": "CRUISE16",
@@ -50,6 +65,8 @@
       "executable_lines": null
     },
     {
+      "key": "CRUISE16/CONTPDA",
+      "label": "CONTPDA",
       "object": "CONTPDA",
       "type": "parameter data area",
       "library": "CRUISE16",
@@ -58,6 +75,8 @@
       "executable_lines": null
     },
     {
+      "key": "CRUISE16/MYPDA",
+      "label": "MYPDA",
       "object": "MYPDA",
       "type": "parameter data area",
       "library": "CRUISE16",
@@ -66,6 +85,8 @@
       "executable_lines": null
     },
     {
+      "key": "CRUISE16/NCCOMM-P",
+      "label": "NCCOMM-P",
       "object": "NCCOMM-P",
       "type": "parameter data area",
       "library": "CRUISE16",
@@ -74,6 +95,8 @@
       "executable_lines": null
     },
     {
+      "key": "CRUISE16/NCCONW-P",
+      "label": "NCCONW-P",
       "object": "NCCONW-P",
       "type": "parameter data area",
       "library": "CRUISE16",
@@ -82,6 +105,8 @@
       "executable_lines": null
     },
     {
+      "key": "CRUISE16/NCCRUL-P",
+      "label": "NCCRUL-P",
       "object": "NCCRUL-P",
       "type": "parameter data area",
       "library": "CRUISE16",
@@ -90,6 +115,8 @@
       "executable_lines": null
     },
     {
+      "key": "CRUISE16/NCCUGE-P",
+      "label": "NCCUGE-P",
       "object": "NCCUGE-P",
       "type": "parameter data area",
       "library": "CRUISE16",
@@ -98,6 +125,8 @@
       "executable_lines": null
     },
     {
+      "key": "CRUISE16/NCCUSL-P",
+      "label": "NCCUSL-P",
       "object": "NCCUSL-P",
       "type": "parameter data area",
       "library": "CRUISE16",
@@ -106,6 +135,8 @@
       "executable_lines": null
     },
     {
+      "key": "CRUISE16/SYPDA",
+      "label": "SYPDA",
       "object": "SYPDA",
       "type": "parameter data area",
       "library": "CRUISE16",
@@ -114,6 +145,8 @@
       "executable_lines": null
     },
     {
+      "key": "CRUISE16/YACHTPDA",
+      "label": "YACHTPDA",
       "object": "YACHTPDA",
       "type": "parameter data area",
       "library": "CRUISE16",
@@ -122,6 +155,8 @@
       "executable_lines": null
     },
     {
+      "key": "CRUISE16/CA3900-N",
+      "label": "CA3900-N",
       "object": "CA3900-N",
       "type": "subprogram",
       "library": "CRUISE16",
@@ -130,6 +165,8 @@
       "executable_lines": 6
     },
     {
+      "key": "CRUISE16/CAMSG-N",
+      "label": "CAMSG-N",
       "object": "CAMSG-N",
       "type": "subprogram",
       "library": "CRUISE16",
@@ -138,6 +175,8 @@
       "executable_lines": 154
     },
     {
+      "key": "CRUISE16/CONEW-N",
+      "label": "CONEW-N",
       "object": "CONEW-N",
       "type": "subprogram",
       "library": "CRUISE16",
@@ -146,6 +185,8 @@
       "executable_lines": 84
     },
     {
+      "key": "CRUISE16/CRGET-N",
+      "label": "CRGET-N",
       "object": "CRGET-N",
       "type": "subprogram",
       "library": "CRUISE16",
@@ -154,6 +195,8 @@
       "executable_lines": 60
     },
     {
+      "key": "CRUISE16/CRLIST-N",
+      "label": "CRLIST-N",
       "object": "CRLIST-N",
       "type": "subprogram",
       "library": "CRUISE16",
@@ -162,6 +205,8 @@
       "executable_lines": 48
     },
     {
+      "key": "CRUISE16/CUGET-N",
+      "label": "CUGET-N",
       "object": "CUGET-N",
       "type": "subprogram",
       "library": "CRUISE16",
@@ -170,6 +215,8 @@
       "executable_lines": 51
     },
     {
+      "key": "CRUISE16/CUMOD-N",
+      "label": "CUMOD-N",
       "object": "CUMOD-N",
       "type": "subprogram",
       "library": "CRUISE16",
@@ -178,6 +225,8 @@
       "executable_lines": 40
     },
     {
+      "key": "CRUISE16/CUNEW-N",
+      "label": "CUNEW-N",
       "object": "CUNEW-N",
       "type": "subprogram",
       "library": "CRUISE16",
@@ -186,6 +235,8 @@
       "executable_lines": 32
     },
     {
+      "key": "RDCRUISE/RDCCRUIS",
+      "label": "RDCCRUIS",
       "object": "RDCCRUIS",
       "type": "global data area",
       "library": "RDCRUISE",
@@ -194,6 +245,8 @@
       "executable_lines": null
     },
     {
+      "key": "RDCRUISE/RDCRUISL",
+      "label": "RDCRUISL",
       "object": "RDCRUISL",
       "type": "local data area",
       "library": "RDCRUISE",
@@ -202,6 +255,8 @@
       "executable_lines": null
     },
     {
+      "key": "RDCRUISE/DELETECU",
+      "label": "DELETECU",
       "object": "DELETECU",
       "type": "program",
       "library": "RDCRUISE",
@@ -210,6 +265,8 @@
       "executable_lines": 13
     },
     {
+      "key": "RDCRUISE/RDCRINIP",
+      "label": "RDCRINIP",
       "object": "RDCRINIP",
       "type": "program",
       "library": "RDCRUISE",
@@ -218,6 +275,8 @@
       "executable_lines": 181
     },
     {
+      "key": "RDCRUISE/RDCRUISP",
+      "label": "RDCRUISP",
       "object": "RDCRUISP",
       "type": "program",
       "library": "RDCRUISE",
@@ -226,6 +285,8 @@
       "executable_lines": 605
     },
     {
+      "key": "RDCRUISE/IMG-LOAD",
+      "label": "IMG-LOAD",
       "object": "IMG-LOAD",
       "type": "subprogram",
       "library": "RDCRUISE",
@@ -234,6 +295,8 @@
       "executable_lines": 7
     },
     {
+      "key": "RDCRUISE/MAKEURL",
+      "label": "MAKEURL",
       "object": "MAKEURL",
       "type": "subprogram",
       "library": "RDCRUISE",
@@ -242,6 +305,8 @@
       "executable_lines": 17
     },
     {
+      "key": "RDCRUISE/RDREADWN",
+      "label": "RDREADWN",
       "object": "RDREADWN",
       "type": "subprogram",
       "library": "RDCRUISE",
@@ -256,379 +321,814 @@
       "caller": "CA3900-N",
       "statement": "USING",
       "callee": "NCDATA-L",
-      "line": 10
+      "line": 10,
+      "resolved": [
+        "CRUISE16/NCDATA-L"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/NCDATA-L"
+      ]
     },
     {
       "caller": "CONEW-N",
       "statement": "USING",
       "callee": "NCCOMM-P",
-      "line": 10
+      "line": 10,
+      "resolved": [
+        "CRUISE16/NCCOMM-P"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/NCCOMM-P"
+      ]
     },
     {
       "caller": "CONEW-N",
       "statement": "USING",
       "callee": "NCCONW-P",
-      "line": 11
+      "line": 11,
+      "resolved": [
+        "CRUISE16/NCCONW-P"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/NCCONW-P"
+      ]
     },
     {
       "caller": "CONEW-N",
       "statement": "USING",
       "callee": "NCDATA-L",
-      "line": 13
+      "line": 13,
+      "resolved": [
+        "CRUISE16/NCDATA-L"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/NCDATA-L"
+      ]
     },
     {
       "caller": "CONEW-N",
       "statement": "INCLUDE",
       "callee": "ERRLOG-I",
-      "line": 37
+      "line": 37,
+      "resolved": [
+        "CRUISE16/ERRLOG-I"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/ERRLOG-I"
+      ]
     },
     {
       "caller": "CONEW-N",
       "statement": "CALLNAT",
       "callee": "CAMSG-N",
-      "line": 143
+      "line": 143,
+      "resolved": [
+        "CRUISE16/CAMSG-N"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/CAMSG-N"
+      ]
     },
     {
       "caller": "CRGET-N",
       "statement": "USING",
       "callee": "NCCOMM-P",
-      "line": 10
+      "line": 10,
+      "resolved": [
+        "CRUISE16/NCCOMM-P"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/NCCOMM-P"
+      ]
     },
     {
       "caller": "CRGET-N",
       "statement": "USING",
       "callee": "NCCRUL-P",
-      "line": 11
+      "line": 11,
+      "resolved": [
+        "CRUISE16/NCCRUL-P"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/NCCRUL-P"
+      ]
     },
     {
       "caller": "CRGET-N",
       "statement": "USING",
       "callee": "NCDATA-L",
-      "line": 15
+      "line": 15,
+      "resolved": [
+        "CRUISE16/NCDATA-L"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/NCDATA-L"
+      ]
     },
     {
       "caller": "CRGET-N",
       "statement": "INCLUDE",
       "callee": "ERRLOG-I",
-      "line": 35
+      "line": 35,
+      "resolved": [
+        "CRUISE16/ERRLOG-I"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/ERRLOG-I"
+      ]
     },
     {
       "caller": "CRGET-N",
       "statement": "CALLNAT",
       "callee": "CAMSG-N",
-      "line": 121
+      "line": 121,
+      "resolved": [
+        "CRUISE16/CAMSG-N"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/CAMSG-N"
+      ]
     },
     {
       "caller": "CRLIST-N",
       "statement": "USING",
       "callee": "NCCOMM-P",
-      "line": 10
+      "line": 10,
+      "resolved": [
+        "CRUISE16/NCCOMM-P"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/NCCOMM-P"
+      ]
     },
     {
       "caller": "CRLIST-N",
       "statement": "USING",
       "callee": "NCCRUL-P",
-      "line": 11
+      "line": 11,
+      "resolved": [
+        "CRUISE16/NCCRUL-P"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/NCCRUL-P"
+      ]
     },
     {
       "caller": "CRLIST-N",
       "statement": "USING",
       "callee": "NCDATA-L",
-      "line": 13
+      "line": 13,
+      "resolved": [
+        "CRUISE16/NCDATA-L"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/NCDATA-L"
+      ]
     },
     {
       "caller": "CRLIST-N",
       "statement": "INCLUDE",
       "callee": "ERRLOG-I",
-      "line": 31
+      "line": 31,
+      "resolved": [
+        "CRUISE16/ERRLOG-I"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/ERRLOG-I"
+      ]
     },
     {
       "caller": "CRLIST-N",
       "statement": "CALLNAT",
       "callee": "CAMSG-N",
-      "line": 96
+      "line": 96,
+      "resolved": [
+        "CRUISE16/CAMSG-N"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/CAMSG-N"
+      ]
     },
     {
       "caller": "CUGET-N",
       "statement": "USING",
       "callee": "NCCOMM-P",
-      "line": 14
+      "line": 14,
+      "resolved": [
+        "CRUISE16/NCCOMM-P"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/NCCOMM-P"
+      ]
     },
     {
       "caller": "CUGET-N",
       "statement": "USING",
       "callee": "NCCUGE-P",
-      "line": 15
+      "line": 15,
+      "resolved": [
+        "CRUISE16/NCCUGE-P"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/NCCUGE-P"
+      ]
     },
     {
       "caller": "CUGET-N",
       "statement": "USING",
       "callee": "NCDATA-L",
-      "line": 17
+      "line": 17,
+      "resolved": [
+        "CRUISE16/NCDATA-L"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/NCDATA-L"
+      ]
     },
     {
       "caller": "CUGET-N",
       "statement": "INCLUDE",
       "callee": "ERRLOG-I",
-      "line": 38
+      "line": 38,
+      "resolved": [
+        "CRUISE16/ERRLOG-I"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/ERRLOG-I"
+      ]
     },
     {
       "caller": "CUGET-N",
       "statement": "CALLNAT",
       "callee": "CAMSG-N",
-      "line": 82
+      "line": 82,
+      "resolved": [
+        "CRUISE16/CAMSG-N"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/CAMSG-N"
+      ]
     },
     {
       "caller": "CUMOD-N",
       "statement": "USING",
       "callee": "NCCOMM-P",
-      "line": 10
+      "line": 10,
+      "resolved": [
+        "CRUISE16/NCCOMM-P"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/NCCOMM-P"
+      ]
     },
     {
       "caller": "CUMOD-N",
       "statement": "USING",
       "callee": "NCCUGE-P",
-      "line": 11
+      "line": 11,
+      "resolved": [
+        "CRUISE16/NCCUGE-P"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/NCCUGE-P"
+      ]
     },
     {
       "caller": "CUMOD-N",
       "statement": "USING",
       "callee": "NCDATA-L",
-      "line": 13
+      "line": 13,
+      "resolved": [
+        "CRUISE16/NCDATA-L"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/NCDATA-L"
+      ]
     },
     {
       "caller": "CUMOD-N",
       "statement": "INCLUDE",
       "callee": "ERRLOG-I",
-      "line": 26
+      "line": 26,
+      "resolved": [
+        "CRUISE16/ERRLOG-I"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/ERRLOG-I"
+      ]
     },
     {
       "caller": "CUMOD-N",
       "statement": "CALLNAT",
       "callee": "CAMSG-N",
-      "line": 72
+      "line": 72,
+      "resolved": [
+        "CRUISE16/CAMSG-N"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/CAMSG-N"
+      ]
     },
     {
       "caller": "CUNEW-N",
       "statement": "USING",
       "callee": "NCCOMM-P",
-      "line": 10
+      "line": 10,
+      "resolved": [
+        "CRUISE16/NCCOMM-P"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/NCCOMM-P"
+      ]
     },
     {
       "caller": "CUNEW-N",
       "statement": "USING",
       "callee": "NCCUGE-P",
-      "line": 11
+      "line": 11,
+      "resolved": [
+        "CRUISE16/NCCUGE-P"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/NCCUGE-P"
+      ]
     },
     {
       "caller": "CUNEW-N",
       "statement": "USING",
       "callee": "NCDATA-L",
-      "line": 13
+      "line": 13,
+      "resolved": [
+        "CRUISE16/NCDATA-L"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/NCDATA-L"
+      ]
     },
     {
       "caller": "CUNEW-N",
       "statement": "INCLUDE",
       "callee": "ERRLOG-I",
-      "line": 25
+      "line": 25,
+      "resolved": [
+        "CRUISE16/ERRLOG-I"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/ERRLOG-I"
+      ]
     },
     {
       "caller": "CUNEW-N",
       "statement": "CALLNAT",
       "callee": "CAMSG-N",
-      "line": 62
+      "line": 62,
+      "resolved": [
+        "CRUISE16/CAMSG-N"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "CRUISE16/CAMSG-N"
+      ]
     },
     {
       "caller": "DELETECU",
       "statement": "USING",
       "callee": "NCDATA-L",
-      "line": 8
+      "line": 8,
+      "resolved": [
+        "CRUISE16/NCDATA-L"
+      ],
+      "resolution": "steplib CRUISE16",
+      "candidates": [
+        "CRUISE16/NCDATA-L"
+      ]
     },
     {
       "caller": "RDCRINIP",
       "statement": "USING",
       "callee": "RDCCRUIS",
-      "line": 10
+      "line": 10,
+      "resolved": [
+        "RDCRUISE/RDCCRUIS"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "RDCRUISE/RDCCRUIS"
+      ]
     },
     {
       "caller": "RDCRINIP",
       "statement": "CALLNAT",
       "callee": "RDREADWN",
-      "line": 26
+      "line": 26,
+      "resolved": [
+        "RDCRUISE/RDREADWN"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "RDCRUISE/RDREADWN"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "USING",
       "callee": "RDCCRUIS",
-      "line": 25
+      "line": 25,
+      "resolved": [
+        "RDCRUISE/RDCCRUIS"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "RDCRUISE/RDCCRUIS"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "USING",
       "callee": "RDCRUISL",
-      "line": 29
+      "line": 29,
+      "resolved": [
+        "RDCRUISE/RDCRUISL"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "RDCRUISE/RDCRUISL"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "USING",
       "callee": "NCCUGE-P",
-      "line": 30
+      "line": 30,
+      "resolved": [
+        "CRUISE16/NCCUGE-P"
+      ],
+      "resolution": "steplib CRUISE16",
+      "candidates": [
+        "CRUISE16/NCCUGE-P"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "USING",
       "callee": "NCCOMM-P",
-      "line": 31
+      "line": 31,
+      "resolved": [
+        "CRUISE16/NCCOMM-P"
+      ],
+      "resolution": "steplib CRUISE16",
+      "candidates": [
+        "CRUISE16/NCCOMM-P"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "USING",
       "callee": "NCCRUL-P",
-      "line": 32
+      "line": 32,
+      "resolved": [
+        "CRUISE16/NCCRUL-P"
+      ],
+      "resolution": "steplib CRUISE16",
+      "candidates": [
+        "CRUISE16/NCCRUL-P"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "USING",
       "callee": "NCDATA-L",
-      "line": 33
+      "line": 33,
+      "resolved": [
+        "CRUISE16/NCDATA-L"
+      ],
+      "resolution": "steplib CRUISE16",
+      "candidates": [
+        "CRUISE16/NCDATA-L"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "USING",
       "callee": "NCCONW-P",
-      "line": 34
+      "line": 34,
+      "resolved": [
+        "CRUISE16/NCCONW-P"
+      ],
+      "resolution": "steplib CRUISE16",
+      "candidates": [
+        "CRUISE16/NCCONW-P"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "FETCH",
       "callee": "RDCRINIP",
-      "line": 62
+      "line": 62,
+      "resolved": [
+        "RDCRUISE/RDCRINIP"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "RDCRUISE/RDCRINIP"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "FETCH",
       "callee": "RDCRINIP",
-      "line": 274
+      "line": 274,
+      "resolved": [
+        "RDCRUISE/RDCRINIP"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "RDCRUISE/RDCRINIP"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "FETCH",
       "callee": "RDCRINIP",
-      "line": 287
+      "line": 287,
+      "resolved": [
+        "RDCRUISE/RDCRINIP"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "RDCRUISE/RDCRINIP"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "FETCH",
       "callee": "RDCRINIP",
-      "line": 300
+      "line": 300,
+      "resolved": [
+        "RDCRUISE/RDCRINIP"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "RDCRUISE/RDCRINIP"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "FETCH",
       "callee": "RDCRINIP",
-      "line": 312
+      "line": 312,
+      "resolved": [
+        "RDCRUISE/RDCRINIP"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "RDCRUISE/RDCRINIP"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "CALLNAT",
       "callee": "CUGET-N",
-      "line": 514
+      "line": 514,
+      "resolved": [
+        "CRUISE16/CUGET-N"
+      ],
+      "resolution": "steplib CRUISE16",
+      "candidates": [
+        "CRUISE16/CUGET-N"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "CALLNAT",
       "callee": "CONEW-N",
-      "line": 581
+      "line": 581,
+      "resolved": [
+        "CRUISE16/CONEW-N"
+      ],
+      "resolution": "steplib CRUISE16",
+      "candidates": [
+        "CRUISE16/CONEW-N"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "CALLNAT",
       "callee": "CUMOD-N",
-      "line": 626
+      "line": 626,
+      "resolved": [
+        "CRUISE16/CUMOD-N"
+      ],
+      "resolution": "steplib CRUISE16",
+      "candidates": [
+        "CRUISE16/CUMOD-N"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "CALLNAT",
       "callee": "CUNEW-N",
-      "line": 672
+      "line": 672,
+      "resolved": [
+        "CRUISE16/CUNEW-N"
+      ],
+      "resolution": "steplib CRUISE16",
+      "candidates": [
+        "CRUISE16/CUNEW-N"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "CALLNAT",
       "callee": "CRGET-N",
-      "line": 716
+      "line": 716,
+      "resolved": [
+        "CRUISE16/CRGET-N"
+      ],
+      "resolution": "steplib CRUISE16",
+      "candidates": [
+        "CRUISE16/CRGET-N"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "CALLNAT",
       "callee": "MAKEURL",
-      "line": 734
+      "line": 734,
+      "resolved": [
+        "RDCRUISE/MAKEURL"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "RDCRUISE/MAKEURL"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "CALLNAT",
       "callee": "CRLIST-N",
-      "line": 765
+      "line": 765,
+      "resolved": [
+        "CRUISE16/CRLIST-N"
+      ],
+      "resolution": "steplib CRUISE16",
+      "candidates": [
+        "CRUISE16/CRLIST-N"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "CALLNAT",
       "callee": "CRGET-N",
-      "line": 827
+      "line": 827,
+      "resolved": [
+        "CRUISE16/CRGET-N"
+      ],
+      "resolution": "steplib CRUISE16",
+      "candidates": [
+        "CRUISE16/CRGET-N"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "CALLNAT",
       "callee": "MAKEURL",
-      "line": 844
+      "line": 844,
+      "resolved": [
+        "RDCRUISE/MAKEURL"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "RDCRUISE/MAKEURL"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "CALLNAT",
       "callee": "CRGET-N",
-      "line": 857
+      "line": 857,
+      "resolved": [
+        "CRUISE16/CRGET-N"
+      ],
+      "resolution": "steplib CRUISE16",
+      "candidates": [
+        "CRUISE16/CRGET-N"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "CALLNAT",
       "callee": "MAKEURL",
-      "line": 874
+      "line": 874,
+      "resolved": [
+        "RDCRUISE/MAKEURL"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "RDCRUISE/MAKEURL"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "CALLNAT",
       "callee": "CRGET-N",
-      "line": 887
+      "line": 887,
+      "resolved": [
+        "CRUISE16/CRGET-N"
+      ],
+      "resolution": "steplib CRUISE16",
+      "candidates": [
+        "CRUISE16/CRGET-N"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "CALLNAT",
       "callee": "MAKEURL",
-      "line": 904
+      "line": 904,
+      "resolved": [
+        "RDCRUISE/MAKEURL"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "RDCRUISE/MAKEURL"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "CALLNAT",
       "callee": "CRGET-N",
-      "line": 917
+      "line": 917,
+      "resolved": [
+        "CRUISE16/CRGET-N"
+      ],
+      "resolution": "steplib CRUISE16",
+      "candidates": [
+        "CRUISE16/CRGET-N"
+      ]
     },
     {
       "caller": "RDCRUISP",
       "statement": "CALLNAT",
       "callee": "MAKEURL",
-      "line": 934
+      "line": 934,
+      "resolved": [
+        "RDCRUISE/MAKEURL"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "RDCRUISE/MAKEURL"
+      ]
     },
     {
       "caller": "IMG-LOAD",
       "statement": "CALLNAT",
       "callee": "MAKEURL",
-      "line": 28
+      "line": 28,
+      "resolved": [
+        "RDCRUISE/MAKEURL"
+      ],
+      "resolution": "current library",
+      "candidates": [
+        "RDCRUISE/MAKEURL"
+      ]
     }
   ],
   "dynamic_invocations": [],
   "reachability": [
     {
       "object": "ERRLOG-I",
+      "key": "CRUISE16/ERRLOG-I",
       "type": "copycode",
       "library": "CRUISE16",
       "callers": [
@@ -643,6 +1143,7 @@
     },
     {
       "object": "NCDATA-L",
+      "key": "CRUISE16/NCDATA-L",
       "type": "local data area",
       "library": "CRUISE16",
       "callers": [
@@ -660,6 +1161,7 @@
     },
     {
       "object": "CONTPDA",
+      "key": "CRUISE16/CONTPDA",
       "type": "parameter data area",
       "library": "CRUISE16",
       "callers": [],
@@ -667,6 +1169,7 @@
     },
     {
       "object": "MYPDA",
+      "key": "CRUISE16/MYPDA",
       "type": "parameter data area",
       "library": "CRUISE16",
       "callers": [],
@@ -674,6 +1177,7 @@
     },
     {
       "object": "NCCOMM-P",
+      "key": "CRUISE16/NCCOMM-P",
       "type": "parameter data area",
       "library": "CRUISE16",
       "callers": [
@@ -689,6 +1193,7 @@
     },
     {
       "object": "NCCONW-P",
+      "key": "CRUISE16/NCCONW-P",
       "type": "parameter data area",
       "library": "CRUISE16",
       "callers": [
@@ -699,6 +1204,7 @@
     },
     {
       "object": "NCCRUL-P",
+      "key": "CRUISE16/NCCRUL-P",
       "type": "parameter data area",
       "library": "CRUISE16",
       "callers": [
@@ -710,6 +1216,7 @@
     },
     {
       "object": "NCCUGE-P",
+      "key": "CRUISE16/NCCUGE-P",
       "type": "parameter data area",
       "library": "CRUISE16",
       "callers": [
@@ -722,6 +1229,7 @@
     },
     {
       "object": "NCCUSL-P",
+      "key": "CRUISE16/NCCUSL-P",
       "type": "parameter data area",
       "library": "CRUISE16",
       "callers": [],
@@ -729,6 +1237,7 @@
     },
     {
       "object": "SYPDA",
+      "key": "CRUISE16/SYPDA",
       "type": "parameter data area",
       "library": "CRUISE16",
       "callers": [],
@@ -736,6 +1245,7 @@
     },
     {
       "object": "YACHTPDA",
+      "key": "CRUISE16/YACHTPDA",
       "type": "parameter data area",
       "library": "CRUISE16",
       "callers": [],
@@ -743,6 +1253,7 @@
     },
     {
       "object": "CA3900-N",
+      "key": "CRUISE16/CA3900-N",
       "type": "subprogram",
       "library": "CRUISE16",
       "callers": [],
@@ -750,6 +1261,7 @@
     },
     {
       "object": "CAMSG-N",
+      "key": "CRUISE16/CAMSG-N",
       "type": "subprogram",
       "library": "CRUISE16",
       "callers": [
@@ -764,6 +1276,7 @@
     },
     {
       "object": "CONEW-N",
+      "key": "CRUISE16/CONEW-N",
       "type": "subprogram",
       "library": "CRUISE16",
       "callers": [
@@ -773,6 +1286,7 @@
     },
     {
       "object": "CRGET-N",
+      "key": "CRUISE16/CRGET-N",
       "type": "subprogram",
       "library": "CRUISE16",
       "callers": [
@@ -782,6 +1296,7 @@
     },
     {
       "object": "CRLIST-N",
+      "key": "CRUISE16/CRLIST-N",
       "type": "subprogram",
       "library": "CRUISE16",
       "callers": [
@@ -791,6 +1306,7 @@
     },
     {
       "object": "CUGET-N",
+      "key": "CRUISE16/CUGET-N",
       "type": "subprogram",
       "library": "CRUISE16",
       "callers": [
@@ -800,6 +1316,7 @@
     },
     {
       "object": "CUMOD-N",
+      "key": "CRUISE16/CUMOD-N",
       "type": "subprogram",
       "library": "CRUISE16",
       "callers": [
@@ -809,6 +1326,7 @@
     },
     {
       "object": "CUNEW-N",
+      "key": "CRUISE16/CUNEW-N",
       "type": "subprogram",
       "library": "CRUISE16",
       "callers": [
@@ -818,6 +1336,7 @@
     },
     {
       "object": "RDCCRUIS",
+      "key": "RDCRUISE/RDCCRUIS",
       "type": "global data area",
       "library": "RDCRUISE",
       "callers": [
@@ -828,6 +1347,7 @@
     },
     {
       "object": "RDCRUISL",
+      "key": "RDCRUISE/RDCRUISL",
       "type": "local data area",
       "library": "RDCRUISE",
       "callers": [
@@ -837,6 +1357,7 @@
     },
     {
       "object": "DELETECU",
+      "key": "RDCRUISE/DELETECU",
       "type": "program",
       "library": "RDCRUISE",
       "callers": [],
@@ -844,6 +1365,7 @@
     },
     {
       "object": "RDCRINIP",
+      "key": "RDCRUISE/RDCRINIP",
       "type": "program",
       "library": "RDCRUISE",
       "callers": [
@@ -853,6 +1375,7 @@
     },
     {
       "object": "RDCRUISP",
+      "key": "RDCRUISE/RDCRUISP",
       "type": "program",
       "library": "RDCRUISE",
       "callers": [],
@@ -860,6 +1383,7 @@
     },
     {
       "object": "IMG-LOAD",
+      "key": "RDCRUISE/IMG-LOAD",
       "type": "subprogram",
       "library": "RDCRUISE",
       "callers": [],
@@ -867,6 +1391,7 @@
     },
     {
       "object": "MAKEURL",
+      "key": "RDCRUISE/MAKEURL",
       "type": "subprogram",
       "library": "RDCRUISE",
       "callers": [
@@ -877,6 +1402,7 @@
     },
     {
       "object": "RDREADWN",
+      "key": "RDCRUISE/RDREADWN",
       "type": "subprogram",
       "library": "RDCRUISE",
       "callers": [
@@ -3523,6 +4049,9 @@
     "code_objects": 15,
     "shadowed_objects": [],
     "static_references": 62,
+    "unresolved_references": [],
+    "ambiguous_references": [],
+    "references_across_shadowed_names": [],
     "dynamic_invocations": 0,
     "unreferenced_objects": [
       "CA3900-N",
@@ -3536,6 +4065,7 @@
     "standalone_programs_no_ui_path": [
       "DELETECU"
     ],
+    "definitions_not_reached_by_name_resolution": [],
     "message_codes_cataloged": 31,
     "message_codes_emitted": 11,
     "message_codes_cataloged_never_emitted": 20,

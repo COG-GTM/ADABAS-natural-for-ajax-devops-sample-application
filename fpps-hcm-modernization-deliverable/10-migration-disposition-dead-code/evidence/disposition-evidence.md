@@ -15,8 +15,13 @@ sources under `SunnyIslands/Natural-Libraries/`. **Do not edit by hand.**
 |---|---|
 | Natural objects analyzed | 31 |
 | Code objects (subprogram / program / copycode) | 15 |
+| Steplib chain searched after the caller's library (`SunnyIslands/.natural`) | CRUISE16 |
 | Object names present in more than one library (shadowing) | none |
 | Static literal references (CALLNAT/FETCH/INCLUDE/USING) | 62 |
+| References that reach no object in the analyzed scope / steplib chain | none |
+| References that could reach more than one same-named object | none |
+| References to a name defined in more than one library (which one wins) | none |
+| Definitions that a same-named reference does not reach (shadowed / outside chain) | none |
 | Dynamic invocations (unresolvable statically) | 0 |
 | Objects unreferenced in analyzed scope | CA3900-N, CONTPDA, IMG-LOAD, MYPDA, NCCUSL-P, SYPDA, YACHTPDA |
 | Standalone programs with no UI path | DELETECU |
@@ -69,70 +74,70 @@ sources under `SunnyIslands/Natural-Libraries/`. **Do not edit by hand.**
 
 ## Static reference edges
 
-| Caller | Statement | Callee | Line |
-|---|---|---|---|
-| `CA3900-N` | USING | `NCDATA-L` | 10 |
-| `CONEW-N` | USING | `NCCOMM-P` | 10 |
-| `CONEW-N` | USING | `NCCONW-P` | 11 |
-| `CONEW-N` | USING | `NCDATA-L` | 13 |
-| `CONEW-N` | INCLUDE | `ERRLOG-I` | 37 |
-| `CONEW-N` | CALLNAT | `CAMSG-N` | 143 |
-| `CRGET-N` | USING | `NCCOMM-P` | 10 |
-| `CRGET-N` | USING | `NCCRUL-P` | 11 |
-| `CRGET-N` | USING | `NCDATA-L` | 15 |
-| `CRGET-N` | INCLUDE | `ERRLOG-I` | 35 |
-| `CRGET-N` | CALLNAT | `CAMSG-N` | 121 |
-| `CRLIST-N` | USING | `NCCOMM-P` | 10 |
-| `CRLIST-N` | USING | `NCCRUL-P` | 11 |
-| `CRLIST-N` | USING | `NCDATA-L` | 13 |
-| `CRLIST-N` | INCLUDE | `ERRLOG-I` | 31 |
-| `CRLIST-N` | CALLNAT | `CAMSG-N` | 96 |
-| `CUGET-N` | USING | `NCCOMM-P` | 14 |
-| `CUGET-N` | USING | `NCCUGE-P` | 15 |
-| `CUGET-N` | USING | `NCDATA-L` | 17 |
-| `CUGET-N` | INCLUDE | `ERRLOG-I` | 38 |
-| `CUGET-N` | CALLNAT | `CAMSG-N` | 82 |
-| `CUMOD-N` | USING | `NCCOMM-P` | 10 |
-| `CUMOD-N` | USING | `NCCUGE-P` | 11 |
-| `CUMOD-N` | USING | `NCDATA-L` | 13 |
-| `CUMOD-N` | INCLUDE | `ERRLOG-I` | 26 |
-| `CUMOD-N` | CALLNAT | `CAMSG-N` | 72 |
-| `CUNEW-N` | USING | `NCCOMM-P` | 10 |
-| `CUNEW-N` | USING | `NCCUGE-P` | 11 |
-| `CUNEW-N` | USING | `NCDATA-L` | 13 |
-| `CUNEW-N` | INCLUDE | `ERRLOG-I` | 25 |
-| `CUNEW-N` | CALLNAT | `CAMSG-N` | 62 |
-| `DELETECU` | USING | `NCDATA-L` | 8 |
-| `RDCRINIP` | USING | `RDCCRUIS` | 10 |
-| `RDCRINIP` | CALLNAT | `RDREADWN` | 26 |
-| `RDCRUISP` | USING | `RDCCRUIS` | 25 |
-| `RDCRUISP` | USING | `RDCRUISL` | 29 |
-| `RDCRUISP` | USING | `NCCUGE-P` | 30 |
-| `RDCRUISP` | USING | `NCCOMM-P` | 31 |
-| `RDCRUISP` | USING | `NCCRUL-P` | 32 |
-| `RDCRUISP` | USING | `NCDATA-L` | 33 |
-| `RDCRUISP` | USING | `NCCONW-P` | 34 |
-| `RDCRUISP` | FETCH | `RDCRINIP` | 62 |
-| `RDCRUISP` | FETCH | `RDCRINIP` | 274 |
-| `RDCRUISP` | FETCH | `RDCRINIP` | 287 |
-| `RDCRUISP` | FETCH | `RDCRINIP` | 300 |
-| `RDCRUISP` | FETCH | `RDCRINIP` | 312 |
-| `RDCRUISP` | CALLNAT | `CUGET-N` | 514 |
-| `RDCRUISP` | CALLNAT | `CONEW-N` | 581 |
-| `RDCRUISP` | CALLNAT | `CUMOD-N` | 626 |
-| `RDCRUISP` | CALLNAT | `CUNEW-N` | 672 |
-| `RDCRUISP` | CALLNAT | `CRGET-N` | 716 |
-| `RDCRUISP` | CALLNAT | `MAKEURL` | 734 |
-| `RDCRUISP` | CALLNAT | `CRLIST-N` | 765 |
-| `RDCRUISP` | CALLNAT | `CRGET-N` | 827 |
-| `RDCRUISP` | CALLNAT | `MAKEURL` | 844 |
-| `RDCRUISP` | CALLNAT | `CRGET-N` | 857 |
-| `RDCRUISP` | CALLNAT | `MAKEURL` | 874 |
-| `RDCRUISP` | CALLNAT | `CRGET-N` | 887 |
-| `RDCRUISP` | CALLNAT | `MAKEURL` | 904 |
-| `RDCRUISP` | CALLNAT | `CRGET-N` | 917 |
-| `RDCRUISP` | CALLNAT | `MAKEURL` | 934 |
-| `IMG-LOAD` | CALLNAT | `MAKEURL` | 28 |
+| Caller | Statement | Callee | Line | Resolves to |
+|---|---|---|---|---|
+| `CA3900-N` | USING | `NCDATA-L` | 10 | `CRUISE16/NCDATA-L` (current library) |
+| `CONEW-N` | USING | `NCCOMM-P` | 10 | `CRUISE16/NCCOMM-P` (current library) |
+| `CONEW-N` | USING | `NCCONW-P` | 11 | `CRUISE16/NCCONW-P` (current library) |
+| `CONEW-N` | USING | `NCDATA-L` | 13 | `CRUISE16/NCDATA-L` (current library) |
+| `CONEW-N` | INCLUDE | `ERRLOG-I` | 37 | `CRUISE16/ERRLOG-I` (current library) |
+| `CONEW-N` | CALLNAT | `CAMSG-N` | 143 | `CRUISE16/CAMSG-N` (current library) |
+| `CRGET-N` | USING | `NCCOMM-P` | 10 | `CRUISE16/NCCOMM-P` (current library) |
+| `CRGET-N` | USING | `NCCRUL-P` | 11 | `CRUISE16/NCCRUL-P` (current library) |
+| `CRGET-N` | USING | `NCDATA-L` | 15 | `CRUISE16/NCDATA-L` (current library) |
+| `CRGET-N` | INCLUDE | `ERRLOG-I` | 35 | `CRUISE16/ERRLOG-I` (current library) |
+| `CRGET-N` | CALLNAT | `CAMSG-N` | 121 | `CRUISE16/CAMSG-N` (current library) |
+| `CRLIST-N` | USING | `NCCOMM-P` | 10 | `CRUISE16/NCCOMM-P` (current library) |
+| `CRLIST-N` | USING | `NCCRUL-P` | 11 | `CRUISE16/NCCRUL-P` (current library) |
+| `CRLIST-N` | USING | `NCDATA-L` | 13 | `CRUISE16/NCDATA-L` (current library) |
+| `CRLIST-N` | INCLUDE | `ERRLOG-I` | 31 | `CRUISE16/ERRLOG-I` (current library) |
+| `CRLIST-N` | CALLNAT | `CAMSG-N` | 96 | `CRUISE16/CAMSG-N` (current library) |
+| `CUGET-N` | USING | `NCCOMM-P` | 14 | `CRUISE16/NCCOMM-P` (current library) |
+| `CUGET-N` | USING | `NCCUGE-P` | 15 | `CRUISE16/NCCUGE-P` (current library) |
+| `CUGET-N` | USING | `NCDATA-L` | 17 | `CRUISE16/NCDATA-L` (current library) |
+| `CUGET-N` | INCLUDE | `ERRLOG-I` | 38 | `CRUISE16/ERRLOG-I` (current library) |
+| `CUGET-N` | CALLNAT | `CAMSG-N` | 82 | `CRUISE16/CAMSG-N` (current library) |
+| `CUMOD-N` | USING | `NCCOMM-P` | 10 | `CRUISE16/NCCOMM-P` (current library) |
+| `CUMOD-N` | USING | `NCCUGE-P` | 11 | `CRUISE16/NCCUGE-P` (current library) |
+| `CUMOD-N` | USING | `NCDATA-L` | 13 | `CRUISE16/NCDATA-L` (current library) |
+| `CUMOD-N` | INCLUDE | `ERRLOG-I` | 26 | `CRUISE16/ERRLOG-I` (current library) |
+| `CUMOD-N` | CALLNAT | `CAMSG-N` | 72 | `CRUISE16/CAMSG-N` (current library) |
+| `CUNEW-N` | USING | `NCCOMM-P` | 10 | `CRUISE16/NCCOMM-P` (current library) |
+| `CUNEW-N` | USING | `NCCUGE-P` | 11 | `CRUISE16/NCCUGE-P` (current library) |
+| `CUNEW-N` | USING | `NCDATA-L` | 13 | `CRUISE16/NCDATA-L` (current library) |
+| `CUNEW-N` | INCLUDE | `ERRLOG-I` | 25 | `CRUISE16/ERRLOG-I` (current library) |
+| `CUNEW-N` | CALLNAT | `CAMSG-N` | 62 | `CRUISE16/CAMSG-N` (current library) |
+| `DELETECU` | USING | `NCDATA-L` | 8 | `CRUISE16/NCDATA-L` (steplib CRUISE16) |
+| `RDCRINIP` | USING | `RDCCRUIS` | 10 | `RDCRUISE/RDCCRUIS` (current library) |
+| `RDCRINIP` | CALLNAT | `RDREADWN` | 26 | `RDCRUISE/RDREADWN` (current library) |
+| `RDCRUISP` | USING | `RDCCRUIS` | 25 | `RDCRUISE/RDCCRUIS` (current library) |
+| `RDCRUISP` | USING | `RDCRUISL` | 29 | `RDCRUISE/RDCRUISL` (current library) |
+| `RDCRUISP` | USING | `NCCUGE-P` | 30 | `CRUISE16/NCCUGE-P` (steplib CRUISE16) |
+| `RDCRUISP` | USING | `NCCOMM-P` | 31 | `CRUISE16/NCCOMM-P` (steplib CRUISE16) |
+| `RDCRUISP` | USING | `NCCRUL-P` | 32 | `CRUISE16/NCCRUL-P` (steplib CRUISE16) |
+| `RDCRUISP` | USING | `NCDATA-L` | 33 | `CRUISE16/NCDATA-L` (steplib CRUISE16) |
+| `RDCRUISP` | USING | `NCCONW-P` | 34 | `CRUISE16/NCCONW-P` (steplib CRUISE16) |
+| `RDCRUISP` | FETCH | `RDCRINIP` | 62 | `RDCRUISE/RDCRINIP` (current library) |
+| `RDCRUISP` | FETCH | `RDCRINIP` | 274 | `RDCRUISE/RDCRINIP` (current library) |
+| `RDCRUISP` | FETCH | `RDCRINIP` | 287 | `RDCRUISE/RDCRINIP` (current library) |
+| `RDCRUISP` | FETCH | `RDCRINIP` | 300 | `RDCRUISE/RDCRINIP` (current library) |
+| `RDCRUISP` | FETCH | `RDCRINIP` | 312 | `RDCRUISE/RDCRINIP` (current library) |
+| `RDCRUISP` | CALLNAT | `CUGET-N` | 514 | `CRUISE16/CUGET-N` (steplib CRUISE16) |
+| `RDCRUISP` | CALLNAT | `CONEW-N` | 581 | `CRUISE16/CONEW-N` (steplib CRUISE16) |
+| `RDCRUISP` | CALLNAT | `CUMOD-N` | 626 | `CRUISE16/CUMOD-N` (steplib CRUISE16) |
+| `RDCRUISP` | CALLNAT | `CUNEW-N` | 672 | `CRUISE16/CUNEW-N` (steplib CRUISE16) |
+| `RDCRUISP` | CALLNAT | `CRGET-N` | 716 | `CRUISE16/CRGET-N` (steplib CRUISE16) |
+| `RDCRUISP` | CALLNAT | `MAKEURL` | 734 | `RDCRUISE/MAKEURL` (current library) |
+| `RDCRUISP` | CALLNAT | `CRLIST-N` | 765 | `CRUISE16/CRLIST-N` (steplib CRUISE16) |
+| `RDCRUISP` | CALLNAT | `CRGET-N` | 827 | `CRUISE16/CRGET-N` (steplib CRUISE16) |
+| `RDCRUISP` | CALLNAT | `MAKEURL` | 844 | `RDCRUISE/MAKEURL` (current library) |
+| `RDCRUISP` | CALLNAT | `CRGET-N` | 857 | `CRUISE16/CRGET-N` (steplib CRUISE16) |
+| `RDCRUISP` | CALLNAT | `MAKEURL` | 874 | `RDCRUISE/MAKEURL` (current library) |
+| `RDCRUISP` | CALLNAT | `CRGET-N` | 887 | `CRUISE16/CRGET-N` (steplib CRUISE16) |
+| `RDCRUISP` | CALLNAT | `MAKEURL` | 904 | `RDCRUISE/MAKEURL` (current library) |
+| `RDCRUISP` | CALLNAT | `CRGET-N` | 917 | `CRUISE16/CRGET-N` (steplib CRUISE16) |
+| `RDCRUISP` | CALLNAT | `MAKEURL` | 934 | `RDCRUISE/MAKEURL` (current library) |
+| `IMG-LOAD` | CALLNAT | `MAKEURL` | 28 | `RDCRUISE/MAKEURL` (current library) |
 
 ## Message catalog reconciliation (CAMSG-N)
 
