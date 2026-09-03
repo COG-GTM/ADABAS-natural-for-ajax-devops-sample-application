@@ -1,0 +1,33 @@
+sequenceDiagram
+    autonumber
+    participant A as User A (CONEW-N)
+    participant DB as ADABAS NCCRUISE / NCCONTRACT (synthetic simulation)
+    participant B as User B (CONEW-N)
+
+    rect rgb(251, 233, 231)
+    Note over A,B: Before refactor - Demonstrated defect, tests/test_concurrency.py:24-66
+    A->>DB: FIND NCCRUISE (no hold) - CRUISE-STATUS = 1
+    B->>DB: FIND NCCRUISE (no hold) - CRUISE-STATUS = 1
+    A->>DB: UPDATE CRUISE-STATUS = 0
+    B->>DB: UPDATE CRUISE-STATUS = 0 (lost update, second place sold)
+    A->>DB: READ (1) NCCONTRACT DESCENDING (no hold) - MAX = 1000
+    B->>DB: READ (1) NCCONTRACT DESCENDING (no hold) - MAX = 1000
+    A->>DB: STORE contract 1001, END TRANSACTION
+    B->>DB: STORE contract 1001 (duplicate key), END TRANSACTION
+    Note over A,B: Two bookings for one place and two records with the same identifier
+    end
+
+    rect rgb(230, 242, 255)
+    Note over A,B: After refactor - Demonstrated fix, CONEW-N.NSN:79-118, tests/test_concurrency.py:68-127
+    A->>DB: FIND NCCRUISE, then GET *ISN (record HELD) - CRUISE-STATUS = 1
+    B->>DB: FIND NCCRUISE, then GET *ISN - blocked on A's hold
+    A->>DB: LOCAL-AVAIL = 1 > 0: decrement, UPDATE (held)
+    A->>DB: READ (1) NCCONTRACT DESCENDING, UPDATE (R2.) - highest contract HELD
+    A->>DB: new id = 1000 + 1 = 1001, FIND customer, STORE 1001, END TRANSACTION (holds released)
+    DB-->>B: hold granted - re-read returns CRUISE-STATUS = 0
+    B->>DB: LOCAL-AVAIL = 0: BACKOUT TRANSACTION
+    B-->>B: 9902 Cruise no longer available
+    Note over A,B: N free places produce exactly N successes (tests/test_concurrency.py:129-141)
+    end
+
+    Note over A,B: Target HCM (Designed): REQ-I-001 atomic decrement, REQ-I-002 platform-generated unique identifier

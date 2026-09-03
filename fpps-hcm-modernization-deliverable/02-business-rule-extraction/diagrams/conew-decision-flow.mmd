@@ -1,0 +1,47 @@
+flowchart TD
+    classDef edit fill:#fff4e5,stroke:#b26a00,color:#000
+    classDef integrity fill:#e6f2ff,stroke:#1f4e99,color:#000
+    classDef txn fill:#e9f7ef,stroke:#1e7e34,color:#000
+    classDef fail fill:#fbe9e7,stroke:#b71c1c,color:#000
+    classDef note fill:#f5f5f5,stroke:#777,color:#000,stroke-dasharray: 4 2
+
+    A([Booking request: customer id, offering id<br/>Demonstrated - CONEW-N.NSN:54]) --> G{"#STUDENT gate<br/>CONEW-N.NSN:48-50<br/>(exercise scaffolding, retire)"}
+    G -- true --> G9999["9999 Function not yet supported"]:::fail
+    G -- false --> V1{"BR-001 customer id blank or '0'?<br/>CONEW-N.NSN:55"}:::edit
+    V1 -- yes --> M9904["9904 Customer Id missing"]:::fail
+    V1 -- no --> V2{"BR-002 offering id blank or '0'?<br/>CONEW-N.NSN:57"}:::edit
+    V2 -- yes --> M9905["9905 Cruise Id missing"]:::fail
+    V2 -- no --> V3{"BR-004 offering id IS (N8)?<br/>CONEW-N.NSN:60"}:::edit
+    V3 -- no --> M9905b["9905 set (processing continues)"]:::fail
+    V3 -- yes --> V4
+    M9905b --> V4{"BR-005 customer id IS (N8)?<br/>CONEW-N.NSN:66"}:::edit
+    V4 -- no --> M9904b["9904 set (processing continues, BR-M004)"]:::fail
+    V4 -- yes --> F1
+    M9904b --> F1["FIND NCCRUISE by offering id<br/>CONEW-N.NSN:79-80"]:::integrity
+    F1 -- no record --> NF["No code set: response 0, booking id 0<br/>BR-M005 (missing edit 9916)"]:::fail
+    F1 -- record --> H1["BR-006 GET *ISN - re-read in HOLD<br/>fresh CRUISE-STATUS<br/>CONEW-N.NSN:82-83"]:::integrity
+    H1 --> AV{"free places > 0 on the HELD copy?<br/>CONEW-N.NSN:86"}:::integrity
+    AV -- no --> B1["BACKOUT TRANSACTION (release hold)<br/>CONEW-N.NSN:134"]:::txn
+    B1 --> M9902["9902 Cruise no longer available"]:::fail
+    AV -- yes --> DEC["decrement, UPDATE held record<br/>CONEW-N.NSN:90-92"]:::integrity
+    DEC --> R2["BR-007 READ (1) NCCONTRACT DESCENDING<br/>UPDATE (R2.) = fake update, HOLD highest record<br/>CONEW-N.NSN:95-98"]:::integrity
+    R2 -- file empty --> B2["BACKOUT TRANSACTION<br/>CONEW-N.NSN:126-130 (BR-013 / BR-M003)"]:::txn
+    B2 --> M9902
+    R2 -- record held --> ID["new id = MAX+1 (serialized)<br/>price = PRICE-1W, date = *DATN<br/>CONEW-N.NSN:100-110"]:::integrity
+    ID --> CU{"BR-010 FIND NCCUSTOMER exists?<br/>CONEW-N.NSN:157"}:::edit
+    CU -- no --> B3["BACKOUT TRANSACTION (undo decrement)<br/>CONEW-N.NSN:122"]:::txn
+    B3 --> M9918["9918 Customer Id not found"]:::fail
+    CU -- yes --> ST["BR-011 STORE NCCONTRACT + END TRANSACTION<br/>CONEW-N.NSN:116-118"]:::txn
+    ST --> OK["9800 -> CAMSG-N -> response 0 'S-Travel Booking successful'<br/>CONEW-N.NSN:143-146"]:::txn
+
+    M9904 --> CAM["CAMSG-N translation (BR-012 / BR-034)<br/>P-RSPCODE = code, P-RSPTXT = type-text"]
+    M9905 --> CAM
+    M9902 --> CAM
+    M9918 --> CAM
+    NF --> CAM
+    G9999 --> CAM
+    OK --> CAM
+
+    N1["Pay-run integrity analogy: the HOLD + test-and-set is the rule a<br/>language converter drops when it copies read-then-write into application code.<br/>Requirement REQ-I-001 / REQ-I-002 (Designed for the target HCM)"]:::note
+    H1 -.-> N1
+    R2 -.-> N1
