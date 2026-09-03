@@ -1,0 +1,11 @@
+flowchart LR
+    T["push / pull_request<br/>to master"] --> W["regression-tests.yml<br/>ubuntu-latest · Python 3.12"]
+    W --> S1["Step 1<br/>python3 -m compileall -q tests tools"]
+    S1 --> S2["Step 2<br/>python3 -m unittest discover -s tests -v<br/>72 tests: 39 behavioural · 22 source-conformance · 11 evidence-drift"]
+    S2 --> S3["Step 3<br/>generate_data_dictionary.py<br/>git diff --exit-code docs/data-dictionary.md"]
+    S3 --> OK["Green: merge to master"]
+    S1 -.->|"syntax error"| F["Red: blocked"]
+    S2 -.->|"any test fails"| F
+    S3 -.->|"dictionary drift"| F
+    T --> Q["codeql-analysis.yml<br/>language matrix: java<br/>(no Java files: scans nothing)"]
+    L["Local gates (candidate CI steps)<br/>08 reconcile.py --check<br/>09 build_suite_map.py --check"] -.-> S3
