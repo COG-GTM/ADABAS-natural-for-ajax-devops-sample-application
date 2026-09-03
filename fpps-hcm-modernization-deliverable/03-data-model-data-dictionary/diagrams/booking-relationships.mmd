@@ -1,0 +1,13 @@
+sequenceDiagram
+    participant UI as RDCRUISP (adapter)
+    participant B as CONEW-N
+    participant CR as NCCRUISE
+    participant CO as NCCONTRACT
+    participant CU as NCCUSTOMER
+    UI->>B: ID-CUSTOMER-IN, ID-CRUISE-IN
+    B->>CR: FIND CRUISE-ID, GET *ISN in hold
+    B->>CR: CRUISE-STATUS := VAL(status) - 1, UPDATE
+    B->>CO: READ (1) DESCENDING BY CONTRACT-ID, fake UPDATE (hold)
+    B->>CU: FIND PERSON-ID = ID-CUSTOMER-IN (9918 if none)
+    B->>CO: STORE {CONTRACT-ID+1, PRICE-1W, *DATN, ID-CRUISE, ID-CUSTOMER}
+    B->>B: END TRANSACTION (or BACKOUT on 9902/9918)

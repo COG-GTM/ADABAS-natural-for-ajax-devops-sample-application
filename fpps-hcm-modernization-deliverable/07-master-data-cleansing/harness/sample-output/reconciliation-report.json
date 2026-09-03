@@ -1,0 +1,999 @@
+{
+  "reconciliation": {
+    "as_of": "2026-09-03",
+    "seed": 20260903,
+    "per_file": {
+      "NCYACHT": {
+        "in": 12,
+        "loaded": 12,
+        "held": 0,
+        "rejected": 0,
+        "corrected": 0,
+        "balances": true
+      },
+      "NCCRUISE": {
+        "in": 46,
+        "loaded": 43,
+        "held": 1,
+        "rejected": 2,
+        "corrected": 0,
+        "balances": true
+      },
+      "NCCUSTOMER": {
+        "in": 229,
+        "loaded": 204,
+        "held": 20,
+        "rejected": 5,
+        "corrected": 5,
+        "balances": true
+      },
+      "NCCONTRACT": {
+        "in": 312,
+        "loaded": 300,
+        "held": 2,
+        "rejected": 10,
+        "corrected": 0,
+        "balances": true
+      }
+    },
+    "per_rule": {
+      "CR-01": {
+        "name": "Orphaned ID-CUSTOMER",
+        "file": "NCCONTRACT",
+        "evaluated": 312,
+        "passed": 307,
+        "corrected": 0,
+        "flagged": 0,
+        "rejected": 5
+      },
+      "CR-02": {
+        "name": "Orphaned ID-CRUISE",
+        "file": "NCCONTRACT",
+        "evaluated": 312,
+        "passed": 308,
+        "corrected": 0,
+        "flagged": 0,
+        "rejected": 4
+      },
+      "CR-03": {
+        "name": "Orphaned ID-YACHT",
+        "file": "NCCRUISE",
+        "evaluated": 46,
+        "passed": 45,
+        "corrected": 0,
+        "flagged": 1,
+        "rejected": 0
+      },
+      "CR-04": {
+        "name": "CRUISE-STATUS domain",
+        "file": "NCCRUISE",
+        "evaluated": 46,
+        "passed": 44,
+        "corrected": 0,
+        "flagged": 0,
+        "rejected": 2
+      },
+      "CR-05": {
+        "name": "SEX domain",
+        "file": "NCCUSTOMER",
+        "evaluated": 229,
+        "passed": 226,
+        "corrected": 0,
+        "flagged": 3,
+        "rejected": 0
+      },
+      "CR-06": {
+        "name": "EMAIL occurrences",
+        "file": "NCCUSTOMER",
+        "evaluated": 229,
+        "passed": 222,
+        "corrected": 2,
+        "flagged": 5,
+        "rejected": 0
+      },
+      "CR-07": {
+        "name": "PHONE occurrences",
+        "file": "NCCUSTOMER",
+        "evaluated": 229,
+        "passed": 226,
+        "corrected": 0,
+        "flagged": 3,
+        "rejected": 0
+      },
+      "CR-08": {
+        "name": "ZIP-CODE format",
+        "file": "NCCUSTOMER",
+        "evaluated": 229,
+        "passed": 224,
+        "corrected": 1,
+        "flagged": 4,
+        "rejected": 0
+      },
+      "CR-09": {
+        "name": "COUNTRY format",
+        "file": "NCCUSTOMER",
+        "evaluated": 229,
+        "passed": 224,
+        "corrected": 1,
+        "flagged": 4,
+        "rejected": 0
+      },
+      "CR-10": {
+        "name": "BIRTH-DATE validity",
+        "file": "NCCUSTOMER",
+        "evaluated": 229,
+        "passed": 223,
+        "corrected": 0,
+        "flagged": 4,
+        "rejected": 2
+      },
+      "CR-11": {
+        "name": "TIMESTAMP presence",
+        "file": "NCCUSTOMER",
+        "evaluated": 229,
+        "passed": 225,
+        "corrected": 0,
+        "flagged": 4,
+        "rejected": 0
+      },
+      "CR-12": {
+        "name": "Duplicate PERSON-ID",
+        "file": "NCCUSTOMER",
+        "evaluated": 229,
+        "passed": 226,
+        "corrected": 0,
+        "flagged": 1,
+        "rejected": 2
+      },
+      "CR-13": {
+        "name": "Name-field lineage",
+        "file": "NCCUSTOMER",
+        "evaluated": 229,
+        "passed": 225,
+        "corrected": 1,
+        "flagged": 2,
+        "rejected": 1
+      },
+      "CR-14": {
+        "name": "Duplicate CONTRACT-ID",
+        "file": "NCCONTRACT",
+        "evaluated": 312,
+        "passed": 310,
+        "corrected": 0,
+        "flagged": 1,
+        "rejected": 1
+      },
+      "CR-15": {
+        "name": "DATE-BOOKING validity",
+        "file": "NCCONTRACT",
+        "evaluated": 312,
+        "passed": 310,
+        "corrected": 0,
+        "flagged": 1,
+        "rejected": 1
+      }
+    },
+    "control_totals": {
+      "contract_price_in": 413780.0,
+      "contract_price_loaded": 396500.0,
+      "contract_price_held": 3580.0,
+      "contract_price_rejected": 13700.0,
+      "contract_price_balances": true,
+      "distinct_customers_in": 227,
+      "distinct_customers_loaded": 204,
+      "bookings_per_cruise_loaded": {
+        "1484": 15,
+        "196": 10,
+        "2000": 7,
+        "2001": 3,
+        "2002": 7,
+        "2003": 3,
+        "2004": 11,
+        "2005": 7,
+        "2006": 5,
+        "2007": 5,
+        "2008": 7,
+        "2009": 6,
+        "2010": 5,
+        "2011": 6,
+        "2012": 4,
+        "2013": 4,
+        "2014": 9,
+        "2015": 5,
+        "2016": 9,
+        "2017": 3,
+        "2018": 10,
+        "2019": 8,
+        "2020": 10,
+        "2021": 5,
+        "2022": 11,
+        "2023": 5,
+        "2024": 4,
+        "2025": 9,
+        "2026": 9,
+        "2027": 7,
+        "2028": 6,
+        "2029": 6,
+        "2030": 2,
+        "2031": 12,
+        "2032": 5,
+        "2033": 7,
+        "2034": 10,
+        "2035": 6,
+        "2036": 8,
+        "2037": 9,
+        "2038": 9,
+        "2039": 7,
+        "696": 4
+      },
+      "loadable_set_sha256": {
+        "NCYACHT": "7c053fb77695cecaae7f03c06ecbe91e6a19c0c98383a5574b3119dbf7872433",
+        "NCCRUISE": "84efa85f65d5692af168f27918bc5e444a950dfa4029f8f5681533a3195995cb",
+        "NCCUSTOMER": "d57ddc53597e286c143e1c2ed5b1fa44571f48a99525f6fe5e5fcec7aad9d8dc",
+        "NCCONTRACT": "27a44b759897efe5934d47e19c0e8fa8f72c5b31790e7e492e26fe7b084cdec1"
+      }
+    },
+    "crosswalk": {
+      "NCYACHT": {
+        "source_key": "YACHT-ID",
+        "isn_is_not_a_business_key": true,
+        "loaded_keys": [
+          "4711",
+          "4712",
+          "4713",
+          "4714",
+          "4715",
+          "..."
+        ],
+        "loaded_key_count": 12
+      },
+      "NCCRUISE": {
+        "source_key": "CRUISE-ID",
+        "isn_is_not_a_business_key": true,
+        "loaded_keys": [
+          "1484",
+          "196",
+          "2000",
+          "2001",
+          "2002",
+          "..."
+        ],
+        "loaded_key_count": 43
+      },
+      "NCCUSTOMER": {
+        "source_key": "PERSON-ID",
+        "isn_is_not_a_business_key": true,
+        "loaded_keys": [
+          "10000003",
+          "10000004",
+          "10000005",
+          "10000006",
+          "10000007",
+          "..."
+        ],
+        "loaded_key_count": 204
+      },
+      "NCCONTRACT": {
+        "source_key": "CONTRACT-ID",
+        "isn_is_not_a_business_key": true,
+        "loaded_keys": [
+          "500100",
+          "500101",
+          "500102",
+          "500103",
+          "500104",
+          "..."
+        ],
+        "loaded_key_count": 300
+      }
+    },
+    "exception_count": 56
+  },
+  "injected_defects": {
+    "CR-01 orphan ID-CUSTOMER": 4,
+    "CR-01+CR-02 both keys orphaned": 1,
+    "CR-02 orphan ID-CRUISE": 3,
+    "CR-03 orphan ID-YACHT": 1,
+    "CR-04 CRUISE-STATUS blank": 1,
+    "CR-04 CRUISE-STATUS non-digit": 1,
+    "CR-05 SEX outside M/F": 1,
+    "CR-06 >1 distinct EMAIL occurrence": 1,
+    "CR-06 EMAIL without address shape": 1,
+    "CR-06 EMAIL(1) blank, EMAIL(2) set": 1,
+    "CR-06 duplicate EMAIL occurrences": 1,
+    "CR-06 no EMAIL occurrence": 1,
+    "CR-07 >2 PHONE occurrences": 1,
+    "CR-07 AREA-CODE without PHONE-NUMBER": 1,
+    "CR-07 PHONE-NUMBER non-numeric": 1,
+    "CR-08 ZIP-CODE bad shape": 1,
+    "CR-08 ZIP-CODE blank": 1,
+    "CR-08 ZIP-CODE untrimmed": 1,
+    "CR-09 COUNTRY blank": 1,
+    "CR-09 COUNTRY lower case": 1,
+    "CR-09 COUNTRY not 3 letters": 1,
+    "CR-10 BIRTH-DATE implausible age": 1,
+    "CR-10 BIRTH-DATE in future": 1,
+    "CR-10 BIRTH-DATE invalid month/day": 1,
+    "CR-10 BIRTH-DATE missing": 1,
+    "CR-11 TIMESTAMP absent": 2,
+    "CR-12 duplicate PERSON-ID (survivor + 2 extra copies)": 3,
+    "CR-13 FIRST-NAME-OLD blank, FIRST-NAME-1 set": 1,
+    "CR-13 FIRST-NAME-OLD differs from FIRST-NAME-1": 1,
+    "CR-13 SURNAME blank": 1,
+    "CR-13 no first name": 1,
+    "CR-14 duplicate CONTRACT-ID (survivor + 1 extra copy)": 2,
+    "CR-15 DATE-BOOKING after as-of": 1,
+    "CR-15 DATE-BOOKING invalid": 1
+  },
+  "planted_vs_detected": [
+    {
+      "rule": "CR-01",
+      "planted": 5,
+      "baseline_fixture": 0,
+      "detected": 5,
+      "balanced": true
+    },
+    {
+      "rule": "CR-02",
+      "planted": 4,
+      "baseline_fixture": 0,
+      "detected": 4,
+      "balanced": true
+    },
+    {
+      "rule": "CR-03",
+      "planted": 1,
+      "baseline_fixture": 0,
+      "detected": 1,
+      "balanced": true
+    },
+    {
+      "rule": "CR-04",
+      "planted": 2,
+      "baseline_fixture": 0,
+      "detected": 2,
+      "balanced": true
+    },
+    {
+      "rule": "CR-05",
+      "planted": 1,
+      "baseline_fixture": 2,
+      "detected": 3,
+      "balanced": true
+    },
+    {
+      "rule": "CR-06",
+      "planted": 5,
+      "baseline_fixture": 2,
+      "detected": 7,
+      "balanced": true
+    },
+    {
+      "rule": "CR-07",
+      "planted": 3,
+      "baseline_fixture": 0,
+      "detected": 3,
+      "balanced": true
+    },
+    {
+      "rule": "CR-08",
+      "planted": 3,
+      "baseline_fixture": 2,
+      "detected": 5,
+      "balanced": true
+    },
+    {
+      "rule": "CR-09",
+      "planted": 3,
+      "baseline_fixture": 2,
+      "detected": 5,
+      "balanced": true
+    },
+    {
+      "rule": "CR-10",
+      "planted": 4,
+      "baseline_fixture": 2,
+      "detected": 6,
+      "balanced": true
+    },
+    {
+      "rule": "CR-11",
+      "planted": 2,
+      "baseline_fixture": 2,
+      "detected": 4,
+      "balanced": true
+    },
+    {
+      "rule": "CR-12",
+      "planted": 3,
+      "baseline_fixture": 0,
+      "detected": 3,
+      "balanced": true
+    },
+    {
+      "rule": "CR-13",
+      "planted": 4,
+      "baseline_fixture": 0,
+      "detected": 4,
+      "balanced": true
+    },
+    {
+      "rule": "CR-14",
+      "planted": 2,
+      "baseline_fixture": 0,
+      "detected": 2,
+      "balanced": true
+    },
+    {
+      "rule": "CR-15",
+      "planted": 2,
+      "baseline_fixture": 0,
+      "detected": 2,
+      "balanced": true
+    }
+  ],
+  "rules": [
+    {
+      "id": "CR-01",
+      "name": "Orphaned ID-CUSTOMER",
+      "file": "NCCONTRACT",
+      "fields": [
+        "NCCONTRACT.ID-CUSTOMER"
+      ],
+      "category": "referential integrity",
+      "action": "reject",
+      "payroll_analog": "Pay transaction whose employee ID does not exist in the person master",
+      "hcm_target": "Assignment / Element Entry keyed to a Person source key",
+      "evidence": [
+        "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:157-162",
+        "SunnyIslands/Natural-Libraries/CRUISE16/DDMs/NCCONTRA.NSD:26-27"
+      ]
+    },
+    {
+      "id": "CR-02",
+      "name": "Orphaned ID-CRUISE",
+      "file": "NCCONTRACT",
+      "fields": [
+        "NCCONTRACT.ID-CRUISE"
+      ],
+      "category": "referential integrity",
+      "action": "reject",
+      "payroll_analog": "Pay transaction referencing a position or pay element that does not exist",
+      "hcm_target": "Element Entry referencing a Position / Element source key",
+      "evidence": [
+        "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:79-83",
+        "SunnyIslands/Natural-Libraries/CRUISE16/DDMs/NCCONTRA.NSD:28-29"
+      ]
+    },
+    {
+      "id": "CR-03",
+      "name": "Orphaned ID-YACHT",
+      "file": "NCCRUISE",
+      "fields": [
+        "NCCRUISE.ID-YACHT"
+      ],
+      "category": "referential integrity",
+      "action": "flag",
+      "payroll_analog": "Position whose organisation / department does not exist",
+      "hcm_target": "Position.OrganizationId / Department",
+      "evidence": [
+        "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CRLIST-N.NSN:80-83",
+        "SunnyIslands/Natural-Libraries/CRUISE16/DDMs/NCCRUISE.NSD:23-24"
+      ]
+    },
+    {
+      "id": "CR-04",
+      "name": "CRUISE-STATUS domain",
+      "file": "NCCRUISE",
+      "fields": [
+        "NCCRUISE.CRUISE-STATUS"
+      ],
+      "category": "domain",
+      "action": "reject",
+      "payroll_analog": "Open-headcount / vacancy counter outside its coded domain",
+      "hcm_target": "Position headcount (open FTE) or status lookup",
+      "evidence": [
+        "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:82-92",
+        "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CRLIST-N.NSN:53-57",
+        "SunnyIslands/Natural-Libraries/CRUISE16/DDMs/NCCRUISE.NSD:13-14"
+      ]
+    },
+    {
+      "id": "CR-05",
+      "name": "SEX domain",
+      "file": "NCCUSTOMER",
+      "fields": [
+        "NCCUSTOMER.SEX"
+      ],
+      "category": "domain",
+      "action": "flag",
+      "payroll_analog": "Legislative / biographical code outside its lookup",
+      "hcm_target": "Person Legislative Data: Sex (lookup)",
+      "evidence": [
+        "SunnyIslands/Natural-Libraries/CRUISE16/DDMs/NCCUSTOM.NSD:14-16",
+        "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CUGET-N.NSN:94"
+      ]
+    },
+    {
+      "id": "CR-06",
+      "name": "EMAIL occurrences",
+      "file": "NCCUSTOMER",
+      "fields": [
+        "NCCUSTOMER.EMAIL"
+      ],
+      "category": "occurrence / format",
+      "action": "correct",
+      "payroll_analog": "Multiple-value contact field where only the first occurrence is used by code",
+      "hcm_target": "Person Email: one row per occurrence, primary flag on occurrence 1",
+      "evidence": [
+        "SunnyIslands/Natural-Libraries/CRUISE16/DDMs/NCCUSTOM.NSD:24",
+        "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CUNEW-N.NSN:50",
+        "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CUGET-N.NSN:68-77"
+      ]
+    },
+    {
+      "id": "CR-07",
+      "name": "PHONE occurrences",
+      "file": "NCCUSTOMER",
+      "fields": [
+        "NCCUSTOMER.PHONE",
+        "NCCUSTOMER.AREA-CODE",
+        "NCCUSTOMER.PHONE-NUMBER"
+      ],
+      "category": "occurrence / format",
+      "action": "flag",
+      "payroll_analog": "Periodic group never referenced by executable code; occurrence semantics come from the DDM remark only",
+      "hcm_target": "Person Phone: PhoneType from occurrence position (1 = home, 2 = work)",
+      "evidence": [
+        "SunnyIslands/Natural-Libraries/CRUISE16/DDMs/NCCUSTOM.NSD:29-33"
+      ]
+    },
+    {
+      "id": "CR-08",
+      "name": "ZIP-CODE format",
+      "file": "NCCUSTOMER",
+      "fields": [
+        "NCCUSTOMER.ZIP-CODE"
+      ],
+      "category": "format",
+      "action": "correct",
+      "payroll_analog": "Postal code that fails the target country's address validation",
+      "hcm_target": "Person Address: PostalCode",
+      "evidence": [
+        "SunnyIslands/Natural-Libraries/CRUISE16/DDMs/NCCUSTOM.NSD:27",
+        "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CUNEW-N.NSN:52"
+      ]
+    },
+    {
+      "id": "CR-09",
+      "name": "COUNTRY format",
+      "file": "NCCUSTOMER",
+      "fields": [
+        "NCCUSTOMER.COUNTRY"
+      ],
+      "category": "format",
+      "action": "correct",
+      "payroll_analog": "Country code that fails the target lookup (3-letter code, upper case)",
+      "hcm_target": "Person Address: Country",
+      "evidence": [
+        "SunnyIslands/Natural-Libraries/CRUISE16/DDMs/NCCUSTOM.NSD:26",
+        "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CUGET-N.NSN:99"
+      ]
+    },
+    {
+      "id": "CR-10",
+      "name": "BIRTH-DATE validity",
+      "file": "NCCUSTOMER",
+      "fields": [
+        "NCCUSTOMER.BIRTH-DATE"
+      ],
+      "category": "validity",
+      "action": "reject",
+      "payroll_analog": "Date of birth that is not a calendar date, is in the future, or implies an implausible age",
+      "hcm_target": "Person: DateOfBirth",
+      "evidence": [
+        "SunnyIslands/Natural-Libraries/CRUISE16/DDMs/NCCUSTOM.NSD:13",
+        "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CUMOD-N.NSN:59-61",
+        "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CUGET-N.NSN:93"
+      ]
+    },
+    {
+      "id": "CR-11",
+      "name": "TIMESTAMP presence",
+      "file": "NCCUSTOMER",
+      "fields": [
+        "NCCUSTOMER.TIMESTAMP"
+      ],
+      "category": "presence",
+      "action": "flag",
+      "payroll_analog": "Missing last-update audit token; the source's optimistic-lock check cannot run",
+      "hcm_target": "Source-side audit attribute; not loaded, but drives the extract cut-off reconciliation",
+      "evidence": [
+        "SunnyIslands/Natural-Libraries/CRUISE16/DDMs/NCCUSTOM.NSD:34",
+        "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CUMOD-N.NSN:50-67",
+        "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CUNEW-N.NSN:55"
+      ]
+    },
+    {
+      "id": "CR-12",
+      "name": "Duplicate PERSON-ID",
+      "file": "NCCUSTOMER",
+      "fields": [
+        "NCCUSTOMER.PERSON-ID"
+      ],
+      "category": "uniqueness",
+      "action": "reject",
+      "payroll_analog": "Two person-master records carrying the same employee identifier",
+      "hcm_target": "Worker source key (SourceSystemId) must be unique",
+      "evidence": [
+        "SunnyIslands/Natural-Libraries/CRUISE16/DDMs/NCCUSTOM.NSD:12",
+        "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CUNEW-N.NSN:41-46"
+      ]
+    },
+    {
+      "id": "CR-13",
+      "name": "Name-field lineage",
+      "file": "NCCUSTOMER",
+      "fields": [
+        "NCCUSTOMER.SURNAME",
+        "NCCUSTOMER.FIRST-NAME-OLD",
+        "NCCUSTOMER.FIRST-NAME-1"
+      ],
+      "category": "lineage",
+      "action": "correct",
+      "payroll_analog": "Two candidate columns for one legal name attribute, populated by different code paths",
+      "hcm_target": "Person Name: FirstName = FIRST-NAME-OLD, fallback FIRST-NAME-1; LastName = SURNAME",
+      "evidence": [
+        "SunnyIslands/Natural-Libraries/CRUISE16/Local Data Areas/NCDATA-L.NSL:44-45",
+        "SunnyIslands/Natural-Libraries/CRUISE16/Local Data Areas/NCDATA-L.NSL:56",
+        "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CUNEW-N.NSN:48-49",
+        "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CUMOD-N.NSN:53-54",
+        "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CUGET-N.NSN:95-96",
+        "SunnyIslands/Natural-Libraries/RDCRUISE/Programs/RDCRUISP.NSP:619",
+        "SunnyIslands/Natural-Libraries/RDCRUISE/Programs/RDCRUISP.NSP:663"
+      ]
+    },
+    {
+      "id": "CR-14",
+      "name": "Duplicate CONTRACT-ID",
+      "file": "NCCONTRACT",
+      "fields": [
+        "NCCONTRACT.CONTRACT-ID"
+      ],
+      "category": "uniqueness",
+      "action": "reject",
+      "payroll_analog": "Two pay transactions carrying the same transaction identifier",
+      "hcm_target": "Element Entry source key must be unique",
+      "evidence": [
+        "SunnyIslands/Natural-Libraries/CRUISE16/DDMs/NCCONTRA.NSD:12",
+        "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:96-102"
+      ]
+    },
+    {
+      "id": "CR-15",
+      "name": "DATE-BOOKING validity",
+      "file": "NCCONTRACT",
+      "fields": [
+        "NCCONTRACT.DATE-BOOKING"
+      ],
+      "category": "validity",
+      "action": "reject",
+      "payroll_analog": "Transaction effective date that is not a calendar date or lies after the extract cut-off",
+      "hcm_target": "Element Entry: EffectiveStartDate",
+      "evidence": [
+        "SunnyIslands/Natural-Libraries/CRUISE16/DDMs/NCCONTRA.NSD:18",
+        "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:105-106"
+      ]
+    }
+  ],
+  "profile": {
+    "NCYACHT": {
+      "records": 12,
+      "fields": [
+        {
+          "field": "YACHT-ID",
+          "kind": "scalar",
+          "populated": 12,
+          "distinct": 12,
+          "min": "4711",
+          "max": "4722",
+          "occurrences": {}
+        },
+        {
+          "field": "YACHT-NAME",
+          "kind": "scalar",
+          "populated": 12,
+          "distinct": 12,
+          "min": "Island Breeze",
+          "max": "Yacht 12",
+          "occurrences": {}
+        },
+        {
+          "field": "YACHT-TYPE",
+          "kind": "scalar",
+          "populated": 12,
+          "distinct": 3,
+          "min": "Catamaran",
+          "max": "Sloop",
+          "occurrences": {}
+        }
+      ]
+    },
+    "NCCRUISE": {
+      "records": 46,
+      "fields": [
+        {
+          "field": "CRUISE-ID",
+          "kind": "scalar",
+          "populated": 46,
+          "distinct": 46,
+          "min": "196",
+          "max": "2902",
+          "occurrences": {}
+        },
+        {
+          "field": "CRUISE-STATUS",
+          "kind": "scalar",
+          "populated": 45,
+          "distinct": 11,
+          "min": "0",
+          "max": "X",
+          "occurrences": {}
+        },
+        {
+          "field": "DESTINATION-HARBOR",
+          "kind": "scalar",
+          "populated": 46,
+          "distinct": 8,
+          "min": "Agios Nikolaos",
+          "max": "Santorini",
+          "occurrences": {}
+        },
+        {
+          "field": "END-DATE",
+          "kind": "scalar",
+          "populated": 46,
+          "distinct": 32,
+          "min": "20260908",
+          "max": "20270608",
+          "occurrences": {}
+        },
+        {
+          "field": "ID-YACHT",
+          "kind": "scalar",
+          "populated": 46,
+          "distinct": 13,
+          "min": "4711",
+          "max": "9999",
+          "occurrences": {}
+        },
+        {
+          "field": "PRICE-1W",
+          "kind": "scalar",
+          "populated": 46,
+          "distinct": 4,
+          "min": "990.0",
+          "max": "1790.0",
+          "occurrences": {}
+        },
+        {
+          "field": "PRICE-2W",
+          "kind": "scalar",
+          "populated": 46,
+          "distinct": 7,
+          "min": "1831.5",
+          "max": "3311.5",
+          "occurrences": {}
+        },
+        {
+          "field": "PRICE-3W",
+          "kind": "scalar",
+          "populated": 46,
+          "distinct": 7,
+          "min": "2574.0",
+          "max": "4654.0",
+          "occurrences": {}
+        },
+        {
+          "field": "START-DATE",
+          "kind": "scalar",
+          "populated": 46,
+          "distinct": 32,
+          "min": "20260901",
+          "max": "20270601",
+          "occurrences": {}
+        },
+        {
+          "field": "START-HARBOR",
+          "kind": "scalar",
+          "populated": 46,
+          "distinct": 8,
+          "min": "Agios Nikolaos",
+          "max": "Santorini",
+          "occurrences": {}
+        }
+      ]
+    },
+    "NCCUSTOMER": {
+      "records": 229,
+      "fields": [
+        {
+          "field": "BIRTH-DATE",
+          "kind": "scalar",
+          "populated": 226,
+          "distinct": 226,
+          "min": "19000101",
+          "max": "20301231",
+          "occurrences": {}
+        },
+        {
+          "field": "CITY",
+          "kind": "scalar",
+          "populated": 227,
+          "distinct": 8,
+          "min": "Agios Nikolaos",
+          "max": "Santorini",
+          "occurrences": {}
+        },
+        {
+          "field": "COUNTRY",
+          "kind": "scalar",
+          "populated": 226,
+          "distinct": 8,
+          "min": "DEU",
+          "max": "deu",
+          "occurrences": {}
+        },
+        {
+          "field": "EMAIL",
+          "kind": "MU/PE",
+          "populated": 226,
+          "distinct": "",
+          "min": "",
+          "max": "",
+          "occurrences": {
+            "0": 3,
+            "1": 223,
+            "2": 2,
+            "3": 1
+          }
+        },
+        {
+          "field": "FIRST-NAME-1",
+          "kind": "scalar",
+          "populated": 226,
+          "distinct": 14,
+          "min": "Ama",
+          "max": "Thomas",
+          "occurrences": {}
+        },
+        {
+          "field": "FIRST-NAME-OLD",
+          "kind": "scalar",
+          "populated": 227,
+          "distinct": 13,
+          "min": "Ama",
+          "max": "Tom",
+          "occurrences": {}
+        },
+        {
+          "field": "PERSON-ID",
+          "kind": "scalar",
+          "populated": 229,
+          "distinct": 227,
+          "min": "10000001",
+          "max": "10000361",
+          "occurrences": {}
+        },
+        {
+          "field": "PHONE",
+          "kind": "MU/PE",
+          "populated": 227,
+          "distinct": "",
+          "min": "",
+          "max": "",
+          "occurrences": {
+            "0": 2,
+            "1": 226,
+            "3": 1
+          }
+        },
+        {
+          "field": "SEX",
+          "kind": "scalar",
+          "populated": 227,
+          "distinct": 3,
+          "min": "F",
+          "max": "X",
+          "occurrences": {}
+        },
+        {
+          "field": "STREET-NUMBER",
+          "kind": "scalar",
+          "populated": 227,
+          "distinct": 129,
+          "min": "Harbour Road 1",
+          "max": "Harbour Road 98",
+          "occurrences": {}
+        },
+        {
+          "field": "SURNAME",
+          "kind": "scalar",
+          "populated": 228,
+          "distinct": 12,
+          "min": "Garcia",
+          "max": "Tanaka",
+          "occurrences": {}
+        },
+        {
+          "field": "TIMESTAMP",
+          "kind": "scalar",
+          "populated": 225,
+          "distinct": 223,
+          "min": "TS10000003",
+          "max": "TS10000361",
+          "occurrences": {}
+        },
+        {
+          "field": "ZIP-CODE",
+          "kind": "scalar",
+          "populated": 226,
+          "distinct": 226,
+          "min": " 12345 ",
+          "max": "??/12",
+          "occurrences": {}
+        }
+      ]
+    },
+    "NCCONTRACT": {
+      "records": 312,
+      "fields": [
+        {
+          "field": "CONTRACT-ID",
+          "kind": "scalar",
+          "populated": 312,
+          "distinct": 311,
+          "min": "500100",
+          "max": "500932",
+          "occurrences": {}
+        },
+        {
+          "field": "DATE-BOOKING",
+          "kind": "scalar",
+          "populated": 312,
+          "distinct": 154,
+          "min": "20260105",
+          "max": "20271001",
+          "occurrences": {}
+        },
+        {
+          "field": "ID-CRUISE",
+          "kind": "scalar",
+          "populated": 312,
+          "distinct": 47,
+          "min": "196",
+          "max": "8899",
+          "occurrences": {}
+        },
+        {
+          "field": "ID-CUSTOMER",
+          "kind": "scalar",
+          "populated": 312,
+          "distinct": 169,
+          "min": "10000001",
+          "max": "99999999",
+          "occurrences": {}
+        },
+        {
+          "field": "PRICE",
+          "kind": "scalar",
+          "populated": 312,
+          "distinct": 4,
+          "min": "990.0",
+          "max": "1790.0",
+          "occurrences": {}
+        }
+      ]
+    }
+  }
+}

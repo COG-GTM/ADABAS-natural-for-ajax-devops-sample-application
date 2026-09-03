@@ -1,0 +1,14 @@
+flowchart LR
+    subgraph SRC["Source (synthetic ADABAS)"]
+        FX["tests/harness/fixtures.make_db()"] --> DIRTY["build_dirty_db()<br/>+ bulk rows + injected defects"]
+    end
+    DIRTY --> P["1 Profile<br/>fill / distinct / min-max /<br/>MU-PE occurrence distribution"]
+    P --> R["2 Rule<br/>catalogue keyed to<br/>dictionary fields (CR-01..CR-15)"]
+    R --> C["3 Cleanse<br/>pass / correct / flag / reject<br/>per record, worst outcome wins"]
+    C --> REC["4 Reconcile<br/>in = loaded + held + rejected<br/>price totals, hashes, exceptions"]
+    REC --> OUT1["Loadable set → HDL .dat (designed)"]
+    REC --> OUT2["Held set → steward queue"]
+    REC --> OUT3["Rejected set → source remediation"]
+    DICT["03 data-dictionary-hcm.md<br/>(cleansing-rules column)"] -. keyed by (file, field) .-> R
+    classDef designed stroke-dasharray: 5 5;
+    class OUT1 designed;
