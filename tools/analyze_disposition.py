@@ -24,6 +24,7 @@ Outputs (under fpps-hcm-modernization-deliverable/10-migration-disposition-dead-
 import json
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -409,6 +410,63 @@ def _group_reset_targets(line):
         yield t.group("q"), t.group("n")
 
 
+_MOVE_BY_NAME_RE = re.compile(
+    r"\bMOVE\s+BY\s+NAME\s+(?:(?P<sq>" + _IDENT + r"+)\.)?(?P<s>" + _IDENT
+    + r"+)(?:\s*\([^)]*\))?\s+TO\s+(?:(?P<tq>" + _IDENT + r"+)\.)?(?P<t>"
+    + _IDENT + r"+)(?:\s*\([^)]*\))?")
+
+
+def _resolve_group(qualifier, name, scope):
+    """Structures in ``scope`` in which ``[qualifier.]name`` denotes a level-1
+    structure or a group.  Returns ``[(structure, scalar field names below
+    it)]``; scalars never match, so a RESET of a scalar is left to
+    ``_is_assignment``."""
+    hits = []
+    for s in scope:
+        if name == s["name"] and qualifier is None:
+            if s["fields"]:  # a level-1 scalar is not a group
+                hits.append((s, [f for f, _, g, _ in s["fields"] if not g]))
+            continue
+        for fname, _, is_group, quals in s["fields"]:
+            if fname == name and is_group and (qualifier is None or qualifier in quals):
+                hits.append((s, [f for f, _, g, q in s["fields"]
+                                 if not g and name in q]))
+                break
+    return hits
+
+
+def _implicit_ops(scope, lines):
+    """Field operations implied by whole-structure statements, keyed
+    ``(owner, structure, field, kind)``:
+
+    * ``MOVE BY NAME src TO tgt`` reads every scalar of ``src`` whose name
+      also exists under ``tgt`` (``read``) and assigns the matching scalar of
+      ``tgt`` (``assign``);
+    * ``RESET`` of a structure or group clears every scalar below it
+      (``reset`` — tracked apart from value assignments).
+
+    An operand that resolves to more than one structure is ambiguous and is
+    skipped, mirroring ``_resolve``."""
+    ops = Counter()
+    for line in lines:
+        m = _MOVE_BY_NAME_RE.search(line)
+        if m:
+            src = _resolve_group(m.group("sq"), m.group("s"), scope)
+            tgt = _resolve_group(m.group("tq"), m.group("t"), scope)
+            if len(src) == 1 and len(tgt) == 1:
+                (ss, sf), (ts, tf) = src[0], tgt[0]
+                for f in set(sf) & set(tf):
+                    ops[(ss["owner"], ss["name"], f, "read")] += 1
+                    ops[(ts["owner"], ts["name"], f, "assign")] += 1
+        for q, target in _group_reset_targets(line):
+            hits = _resolve_group(q, target, scope)
+            if len(hits) == 1:
+                s, fields = hits[0]
+                for f in fields:
+                    ops[(s["owner"], s["name"], f, "reset")] += 1
+    return ops
+
+
 def _ddm_field_usage(objs, refs):
     """For every DDM field: which views expose it and which code objects
     reference it *through one of those views*.  A textual match on a field
@@ -417,6 +475,7 @@ def _ddm_field_usage(objs, refs):
     scopes = _scopes(objs, refs)
     stmt_lines = {n: _statement_lines(o["_src"]) for n, o in objs.items()
                   if o["type"] in CODE_TYPES}
+    implicit = {n: _implicit_ops(scopes[n], stmt_lines[n]) for n in stmt_lines}
     rows = []
     for file_name, ddm in sp.all_ddms().items():
         for f in ddm.fields:
@@ -427,12 +486,18 @@ def _ddm_field_usage(objs, refs):
             exposed = set()
             users = set()
             ambiguous_in = set()
+            reset_in = set()
             for obj, scope in scopes.items():
                 views = [s for s in scope
                          if s["view_of"] == file_name
                          and any(fn == f.name for fn, *_ in s["fields"])]
                 for s in views:
                     exposed.add(f"{s['owner']}.{s['name']}")
+                    key = (s["owner"], s["name"], f.name)
+                    if implicit[obj][key + ("read",)] or implicit[obj][key + ("assign",)]:
+                        users.add(obj)
+                    if implicit[obj][key + ("reset",)]:
+                        reset_in.add(obj)
                 if not views:
                     continue
                 for line in stmt_lines[obj]:
@@ -451,6 +516,7 @@ def _ddm_field_usage(objs, refs):
                 "exposed_in_views": sorted(exposed),
                 "referenced_by": sorted(users),
                 "ambiguous_in": sorted(ambiguous_in),
+                "cleared_by_view_reset_in": sorted(reset_in),
             })
     return rows
 
@@ -494,13 +560,14 @@ def _pda_field_population(objs, refs):
     scopes = _scopes(objs, refs)
     stmt_lines = {n: _statement_lines(o["_src"]) for n, o in objs.items()
                   if o["type"] in CODE_TYPES}
+    implicit = {n: _implicit_ops(scopes[n], stmt_lines[n]) for n in stmt_lines}
     used_pdas = {r["callee"] for r in refs if r["statement"] == "USING"}
     rows = []
     for name, o in objs.items():
         if o["type"] != "parameter data area" or name not in used_pdas:
             continue
         for s in _structures(o["_src"], name):
-            for field, level, is_group, quals in s["fields"]:
+            for field, level, is_group, _ in s["fields"]:
                 if is_group:
                     continue
                 hits = assigned = ambiguous = group_resets = 0
@@ -509,18 +576,16 @@ def _pda_field_population(objs, refs):
                     if not any(v["owner"] == name and v["name"] == s["name"]
                                for v in scope):
                         continue
+                    key = (name, s["name"], field)
+                    by_name_reads = implicit[obj][key + ("read",)]
+                    by_name_assigns = implicit[obj][key + ("assign",)]
+                    resets = implicit[obj][key + ("reset",)]
+                    hits += by_name_reads + by_name_assigns
+                    assigned += by_name_assigns
+                    group_resets += resets
+                    if by_name_reads or by_name_assigns or resets:
+                        users.add(obj)
                     for line in stmt_lines[obj]:
-                        for q, target in _group_reset_targets(line):
-                            if target not in quals:
-                                continue
-                            if target == s["name"]:
-                                owners = [v for v in scope if v["name"] == target]
-                            else:
-                                owners = _resolve(q, target, scope, line)
-                            if len(owners) == 1 and owners[0]["owner"] == name \
-                                    and owners[0]["name"] == s["name"]:
-                                group_resets += 1
-                                users.add(obj)
                         for q, start, end in _occurrences(line, field):
                             res = _resolve(q, field, scope, line)
                             mine = [h for h in res if h["owner"] == name
@@ -618,6 +683,10 @@ def control_totals(result):
         r for r in result["ddm_field_usage"]
         if r["kind"] == "field" and not r["exposed_in_views"]
     ]
+    only_view_reset = [
+        f"{r['file']}.{r['field']}" for r in never_used_fields
+        if r["cleared_by_view_reset_in"]
+    ]
     unref_objects = [r["object"] for r in result["reachability"]
                      if r["status"] == "unreferenced in analyzed scope"]
     standalone = [r["object"] for r in result["reachability"]
@@ -649,6 +718,7 @@ def control_totals(result):
         "ddm_fields_not_in_any_view": len(not_in_any_view),
         "ddm_fields_ambiguous_reference": sum(
             1 for r in result["ddm_field_usage"] if r["ambiguous_in"]),
+        "ddm_fields_only_cleared_by_view_reset": sorted(only_view_reset),
         "unused_level1_variables": len(result["unused_level1_variables"]),
         "pda_fields_never_assigned": sorted(never_populated),
         "pda_fields_only_cleared_by_group_reset": sorted(only_reset),
@@ -703,6 +773,8 @@ def render_markdown(result):
         ("DDM fields never referenced through a view by executable code", ct["ddm_fields_never_referenced"]),
         ("DDM fields not exposed in any view (subset of the above)", ct["ddm_fields_not_in_any_view"]),
         ("DDM fields with an ambiguous unqualified reference (excluded)", ct["ddm_fields_ambiguous_reference"]),
+        ("Never-referenced DDM fields whose view is cleared by a whole-view RESET",
+         ", ".join(ct["ddm_fields_only_cleared_by_view_reset"]) or "none"),
         ("Level-1 variables declared but unused", ct["unused_level1_variables"]),
         ("PDA fields never assigned a value anywhere", ", ".join(ct["pda_fields_never_assigned"]) or "none"),
         ("… of which only cleared by a whole-structure RESET",
@@ -747,15 +819,24 @@ def render_markdown(result):
     L += ["", "## DDM field usage (executable code, resolved through views)", "",
           "A code object is credited only when a reference resolves to a view",
           "of the DDM that is visible in that object's `DEFINE DATA` scope;",
-          "same-named PDA/LDA/GDA fields are not counted as database usage.", ""]
+          "same-named PDA/LDA/GDA fields are not counted as database usage.",
+          "`MOVE BY NAME` credits every matching field of the source and target",
+          "structures. A `RESET` of the whole view clears its fields without",
+          "reading or valuing them; that is noted but not counted as a reference.", ""]
     L += _md_table(["File", "Field", "Fmt", "Len", "Exposed in views",
                     "Referenced by (code)", "Note"], [
         (r["file"], f"`{r['field']}`", r["format"], r["length"],
          ", ".join(f"`{u}`" for u in r["exposed_in_views"]) or "**none**",
          ", ".join(f"`{u}`" for u in r["referenced_by"]) or "**none**",
-         ("ambiguous unqualified reference in " + ", ".join(f"`{u}`" for u in r["ambiguous_in"])
-          + "; excluded from totals") if r["ambiguous_in"]
-         else ("group header" if r["kind"] != "field" else ""))
+         "; ".join(filter(None, [
+             ("ambiguous unqualified reference in "
+              + ", ".join(f"`{u}`" for u in r["ambiguous_in"])
+              + "; excluded from totals") if r["ambiguous_in"] else "",
+             ("view cleared by RESET in "
+              + ", ".join(f"`{u}`" for u in r["cleared_by_view_reset_in"]))
+             if r["cleared_by_view_reset_in"] else "",
+             "group header" if r["kind"] != "field" else "",
+         ])))
         for r in result["ddm_field_usage"]
     ])
     L += ["", "## Level-1 variables declared but unused", ""]

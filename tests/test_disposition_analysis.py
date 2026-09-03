@@ -185,6 +185,98 @@ class SymbolResolutionFixtures(unittest.TestCase):
         self.assertTrue(ad._is_assignment(line, s, e))
 
 
+BY_NAME_SVC_SRC = """\
+    DEFINE DATA
+    PARAMETER USING FIX-PDA
+    LOCAL USING FIX-LDA
+    END-DEFINE
+    READ (1) NCCUSTOMER BY PERSON-ID
+      RESET NCCUSTOMER
+      MOVE BY NAME NCCUSTOMER TO P-CUSTOMER-DATA(1)
+      MOVE BY NAME P-CUSTOMER-DATA.NAME TO #WORK
+    END-READ
+    END
+"""
+
+
+class WholeStructureOperationFixtures(unittest.TestCase):
+    """``MOVE BY NAME`` and a ``RESET`` of a whole view touch every matching
+    field without naming it; the analysis must expand them."""
+
+    def setUp(self):
+        self.objs = {
+            "FIX-PDA": _obj("FIX-PDA", "parameter data area", PDA_SRC),
+            "FIX-LDA": _obj("FIX-LDA", "local data area", LDA_SRC),
+            "FIX-SVC": _obj("FIX-SVC", "subprogram", BY_NAME_SVC_SRC),
+        }
+        self.refs, _ = ad._references(self.objs)
+        self.scope = ad._scopes(self.objs, self.refs)["FIX-SVC"]
+
+    def test_resolve_group_returns_scalars_below_structure_or_group(self):
+        [(s, fields)] = ad._resolve_group(None, "NCCUSTOMER", self.scope)
+        self.assertEqual(s["owner"], "FIX-LDA")
+        self.assertEqual(fields, ["PERSON-ID", "SURNAME", "FIRST-NAME-OLD", "TIMESTAMP"])
+        [(s, fields)] = ad._resolve_group("P-CUSTOMER-DATA", "NAME", self.scope)
+        self.assertEqual(s["owner"], "FIX-PDA")
+        self.assertEqual(fields, ["SURNAME", "FIRST-NAME-1"])
+        # NAME is a group in both structures: ambiguous without a qualifier
+        self.assertEqual(len(ad._resolve_group(None, "NAME", self.scope)), 2)
+        # a scalar is not a group
+        self.assertEqual(ad._resolve_group(None, "#WORK", self.scope), [])
+        self.assertEqual(ad._resolve_group(None, "SURNAME", self.scope), [])
+
+    def test_move_by_name_reads_source_and_assigns_matching_targets(self):
+        ops = ad._implicit_ops(self.scope, ad._statement_lines(
+            self.objs["FIX-SVC"]["_src"]))
+        matched = {"PERSON-ID", "SURNAME", "TIMESTAMP"}  # FIRST-NAME-* differ
+        for f in matched:
+            self.assertEqual(ops[("FIX-LDA", "NCCUSTOMER", f, "read")], 1, f)
+            self.assertEqual(ops[("FIX-PDA", "P-CUSTOMER-DATA", f, "assign")], 1, f)
+        self.assertEqual(ops[("FIX-PDA", "P-CUSTOMER-DATA", "FIRST-NAME-1", "assign")], 0)
+        self.assertEqual(ops[("FIX-LDA", "NCCUSTOMER", "FIRST-NAME-OLD", "read")], 0)
+        # #WORK is a scalar, so the second MOVE BY NAME expands to nothing
+        self.assertEqual(sum(v for k, v in ops.items() if k[3] == "assign"), 3)
+
+    def test_view_reset_is_tracked_apart_from_references(self):
+        ops = ad._implicit_ops(self.scope, ad._statement_lines(
+            self.objs["FIX-SVC"]["_src"]))
+        for f in ("PERSON-ID", "SURNAME", "FIRST-NAME-OLD", "TIMESTAMP"):
+            self.assertEqual(ops[("FIX-LDA", "NCCUSTOMER", f, "reset")], 1, f)
+        self.assertEqual(ops[("FIX-PDA", "P-CUSTOMER-DATA", "SURNAME", "reset")], 0)
+
+    def test_ddm_usage_credits_by_name_but_not_reset_only(self):
+        ddm_fields = {
+            "NCCUSTOMER": type("D", (), {"fields": [
+                type("F", (), {"name": n, "field_type": "", "fmt": "A",
+                               "length": 20})()
+                for n in ("PERSON-ID", "SURNAME", "FIRST-NAME-OLD", "TIMESTAMP")
+            ]})(),
+        }
+        real_all_ddms = ad.sp.all_ddms
+        ad.sp.all_ddms = lambda: ddm_fields
+        try:
+            rows = {r["field"]: r for r in ad._ddm_field_usage(self.objs, self.refs)}
+        finally:
+            ad.sp.all_ddms = real_all_ddms
+        self.assertEqual(rows["SURNAME"]["referenced_by"], ["FIX-SVC"])
+        self.assertEqual(rows["TIMESTAMP"]["referenced_by"], ["FIX-SVC"])
+        self.assertEqual(rows["PERSON-ID"]["referenced_by"], ["FIX-SVC"])
+        # only cleared by RESET NCCUSTOMER, never read or valued
+        self.assertEqual(rows["FIRST-NAME-OLD"]["referenced_by"], [])
+        for f in rows.values():
+            self.assertEqual(f["cleared_by_view_reset_in"], ["FIX-SVC"])
+
+    def test_pda_population_counts_by_name_assignments(self):
+        rows = {r["field"]: r for r in ad._pda_field_population(self.objs, self.refs)}
+        for f in ("PERSON-ID", "SURNAME", "TIMESTAMP"):
+            self.assertEqual(rows[f]["assignments"], 1, f)
+            self.assertEqual(rows[f]["referenced_by"], ["FIX-SVC"], f)
+        self.assertEqual(rows["FIRST-NAME-1"]["assignments"], 0)
+        self.assertEqual(rows["FIRST-NAME-1"]["referenced_by"], [])
+        self.assertEqual(rows["WEEK-COUNT-IN"]["assignments"], 0)
+        self.assertEqual(rows["SURNAME"]["group_resets"], 0)
+
+
 class ReferenceAndMarkerFixtures(unittest.TestCase):
     def test_dynamic_call_reported_separately(self):
         objs = {"DYN": _obj("DYN", "program", """\

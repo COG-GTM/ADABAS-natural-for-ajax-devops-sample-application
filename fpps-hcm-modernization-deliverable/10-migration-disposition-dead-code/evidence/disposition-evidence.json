@@ -1175,7 +1175,10 @@
       "referenced_by": [
         "CONEW-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": [
+        "CONEW-N"
+      ]
     },
     {
       "file": "NCCONTRACT",
@@ -1189,7 +1192,10 @@
       "referenced_by": [
         "CONEW-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": [
+        "CONEW-N"
+      ]
     },
     {
       "file": "NCCONTRACT",
@@ -1201,7 +1207,10 @@
         "NCDATA-L.NCCONTRACT"
       ],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": [
+        "CONEW-N"
+      ]
     },
     {
       "file": "NCCONTRACT",
@@ -1213,7 +1222,10 @@
         "NCDATA-L.NCCONTRACT"
       ],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": [
+        "CONEW-N"
+      ]
     },
     {
       "file": "NCCONTRACT",
@@ -1227,7 +1239,10 @@
       "referenced_by": [
         "CONEW-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": [
+        "CONEW-N"
+      ]
     },
     {
       "file": "NCCONTRACT",
@@ -1239,7 +1254,10 @@
         "NCDATA-L.NCCONTRACT"
       ],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": [
+        "CONEW-N"
+      ]
     },
     {
       "file": "NCCONTRACT",
@@ -1249,7 +1267,8 @@
       "kind": "group/periodic header",
       "exposed_in_views": [],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCONTRACT",
@@ -1259,7 +1278,8 @@
       "kind": "field",
       "exposed_in_views": [],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCONTRACT",
@@ -1269,7 +1289,8 @@
       "kind": "field",
       "exposed_in_views": [],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCONTRACT",
@@ -1279,7 +1300,8 @@
       "kind": "group/periodic header",
       "exposed_in_views": [],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCONTRACT",
@@ -1289,7 +1311,8 @@
       "kind": "field",
       "exposed_in_views": [],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCONTRACT",
@@ -1299,7 +1322,8 @@
       "kind": "field",
       "exposed_in_views": [],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCONTRACT",
@@ -1313,7 +1337,10 @@
       "referenced_by": [
         "CONEW-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": [
+        "CONEW-N"
+      ]
     },
     {
       "file": "NCCONTRACT",
@@ -1327,7 +1354,10 @@
       "referenced_by": [
         "CONEW-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": [
+        "CONEW-N"
+      ]
     },
     {
       "file": "NCCRUISE",
@@ -1340,9 +1370,11 @@
       ],
       "referenced_by": [
         "CONEW-N",
-        "CRGET-N"
+        "CRGET-N",
+        "CRLIST-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCRUISE",
@@ -1357,7 +1389,8 @@
         "CONEW-N",
         "CRLIST-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCRUISE",
@@ -1369,7 +1402,8 @@
         "NCDATA-L.NCCRUISE"
       ],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCRUISE",
@@ -1384,7 +1418,8 @@
         "CRGET-N",
         "CRLIST-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCRUISE",
@@ -1394,7 +1429,8 @@
       "kind": "field",
       "exposed_in_views": [],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCRUISE",
@@ -1406,7 +1442,8 @@
         "NCDATA-L.NCCRUISE"
       ],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCRUISE",
@@ -1421,7 +1458,8 @@
         "CRGET-N",
         "CRLIST-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCRUISE",
@@ -1431,7 +1469,8 @@
       "kind": "field",
       "exposed_in_views": [],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCRUISE",
@@ -1446,7 +1485,8 @@
         "CRGET-N",
         "CRLIST-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCRUISE",
@@ -1461,7 +1501,8 @@
         "CRGET-N",
         "CRLIST-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCRUISE",
@@ -1476,7 +1517,8 @@
         "CRGET-N",
         "CRLIST-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCRUISE",
@@ -1488,7 +1530,8 @@
         "NCDATA-L.NCCRUISE"
       ],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCRUISE",
@@ -1504,7 +1547,8 @@
         "CRGET-N",
         "CRLIST-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCRUISE",
@@ -1519,7 +1563,8 @@
         "CRGET-N",
         "CRLIST-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCRUISE",
@@ -1534,7 +1579,8 @@
         "CRGET-N",
         "CRLIST-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCUSTOMER",
@@ -1551,7 +1597,8 @@
         "CUMOD-N",
         "CUNEW-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCUSTOMER",
@@ -1567,7 +1614,8 @@
         "CUMOD-N",
         "CUNEW-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCUSTOMER",
@@ -1581,7 +1629,8 @@
       "referenced_by": [
         "CUGET-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCUSTOMER",
@@ -1593,7 +1642,8 @@
         "NCDATA-L.NCCUSTOMER"
       ],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCUSTOMER",
@@ -1609,7 +1659,8 @@
         "CUMOD-N",
         "CUNEW-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCUSTOMER",
@@ -1625,7 +1676,8 @@
         "CUMOD-N",
         "CUNEW-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCUSTOMER",
@@ -1635,7 +1687,8 @@
       "kind": "field",
       "exposed_in_views": [],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCUSTOMER",
@@ -1645,7 +1698,8 @@
       "kind": "field",
       "exposed_in_views": [],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCUSTOMER",
@@ -1655,7 +1709,8 @@
       "kind": "field",
       "exposed_in_views": [],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCUSTOMER",
@@ -1667,7 +1722,8 @@
         "NCDATA-L.NCCUSTOMER"
       ],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCUSTOMER",
@@ -1683,7 +1739,8 @@
         "CUMOD-N",
         "CUNEW-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCUSTOMER",
@@ -1699,7 +1756,8 @@
         "CUMOD-N",
         "CUNEW-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCUSTOMER",
@@ -1713,7 +1771,8 @@
       "referenced_by": [
         "CUGET-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCUSTOMER",
@@ -1729,7 +1788,8 @@
         "CUMOD-N",
         "CUNEW-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCUSTOMER",
@@ -1745,7 +1805,8 @@
         "CUMOD-N",
         "CUNEW-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCUSTOMER",
@@ -1757,7 +1818,8 @@
         "NCDATA-L.NCCUSTOMER"
       ],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCUSTOMER",
@@ -1769,7 +1831,8 @@
         "NCDATA-L.NCCUSTOMER"
       ],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCUSTOMER",
@@ -1781,7 +1844,8 @@
         "NCDATA-L.NCCUSTOMER"
       ],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCUSTOMER",
@@ -1797,7 +1861,8 @@
         "CUMOD-N",
         "CUNEW-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCCUSTOMER",
@@ -1807,7 +1872,8 @@
       "kind": "field",
       "exposed_in_views": [],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCYACHT",
@@ -1824,7 +1890,8 @@
         "CRGET-N",
         "CRLIST-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCYACHT",
@@ -1841,7 +1908,8 @@
         "CRGET-N",
         "CRLIST-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCYACHT",
@@ -1855,7 +1923,8 @@
         "NCDATA-L.YACHT-PICTURE-UPDATE"
       ],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCYACHT",
@@ -1865,7 +1934,8 @@
       "kind": "field",
       "exposed_in_views": [],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCYACHT",
@@ -1875,7 +1945,8 @@
       "kind": "field",
       "exposed_in_views": [],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCYACHT",
@@ -1885,7 +1956,8 @@
       "kind": "field",
       "exposed_in_views": [],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCYACHT",
@@ -1895,7 +1967,8 @@
       "kind": "field",
       "exposed_in_views": [],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCYACHT",
@@ -1905,7 +1978,8 @@
       "kind": "field",
       "exposed_in_views": [],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCYACHT",
@@ -1915,7 +1989,8 @@
       "kind": "field",
       "exposed_in_views": [],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCYACHT",
@@ -1925,7 +2000,8 @@
       "kind": "field",
       "exposed_in_views": [],
       "referenced_by": [],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCYACHT",
@@ -1939,7 +2015,8 @@
       "referenced_by": [
         "CRGET-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     },
     {
       "file": "NCYACHT",
@@ -1954,7 +2031,8 @@
       "referenced_by": [
         "CRGET-N"
       ],
-      "ambiguous_in": []
+      "ambiguous_in": [],
+      "cleared_by_view_reset_in": []
     }
   ],
   "unused_level1_variables": [
@@ -2226,13 +2304,14 @@
       "pda": "NCCRUL-P",
       "structure": "P-CRUISE-DATA",
       "field": "CRUISE-ID",
-      "statement_references": 4,
-      "assignments": 1,
+      "statement_references": 5,
+      "assignments": 2,
       "reads": 3,
       "group_resets": 0,
       "ambiguous_references": 0,
       "referenced_by": [
         "CRGET-N",
+        "CRLIST-N",
         "RDCRUISP"
       ]
     },
@@ -2240,8 +2319,8 @@
       "pda": "NCCRUL-P",
       "structure": "P-CRUISE-DATA",
       "field": "START-DATE",
-      "statement_references": 10,
-      "assignments": 3,
+      "statement_references": 11,
+      "assignments": 4,
       "reads": 7,
       "group_resets": 0,
       "ambiguous_references": 0,
@@ -2255,8 +2334,8 @@
       "pda": "NCCRUL-P",
       "structure": "P-CRUISE-DATA",
       "field": "END-DATE",
-      "statement_references": 9,
-      "assignments": 3,
+      "statement_references": 10,
+      "assignments": 4,
       "reads": 6,
       "group_resets": 0,
       "ambiguous_references": 0,
@@ -2270,13 +2349,14 @@
       "pda": "NCCRUL-P",
       "structure": "P-CRUISE-DATA",
       "field": "START-HARBOR",
-      "statement_references": 7,
-      "assignments": 1,
+      "statement_references": 8,
+      "assignments": 2,
       "reads": 6,
       "group_resets": 0,
       "ambiguous_references": 0,
       "referenced_by": [
         "CRGET-N",
+        "CRLIST-N",
         "RDCRUISP"
       ]
     },
@@ -2284,13 +2364,14 @@
       "pda": "NCCRUL-P",
       "structure": "P-CRUISE-DATA",
       "field": "DESTINATION-HARBOR",
-      "statement_references": 7,
-      "assignments": 1,
+      "statement_references": 8,
+      "assignments": 2,
       "reads": 6,
       "group_resets": 0,
       "ambiguous_references": 0,
       "referenced_by": [
         "CRGET-N",
+        "CRLIST-N",
         "RDCRUISP"
       ]
     },
@@ -2313,8 +2394,8 @@
       "pda": "NCCRUL-P",
       "structure": "P-CRUISE-DATA",
       "field": "PRICE-1W",
-      "statement_references": 4,
-      "assignments": 3,
+      "statement_references": 5,
+      "assignments": 4,
       "reads": 1,
       "group_resets": 0,
       "ambiguous_references": 0,
@@ -2327,8 +2408,8 @@
       "pda": "NCCRUL-P",
       "structure": "P-CRUISE-DATA",
       "field": "PRICE-2W",
-      "statement_references": 4,
-      "assignments": 3,
+      "statement_references": 5,
+      "assignments": 4,
       "reads": 1,
       "group_resets": 0,
       "ambiguous_references": 0,
@@ -2341,8 +2422,8 @@
       "pda": "NCCRUL-P",
       "structure": "P-CRUISE-DATA",
       "field": "PRICE-3W",
-      "statement_references": 4,
-      "assignments": 3,
+      "statement_references": 5,
+      "assignments": 4,
       "reads": 1,
       "group_resets": 0,
       "ambiguous_references": 0,
@@ -2425,9 +2506,9 @@
       "pda": "NCCUGE-P",
       "structure": "P-CUSTOMER-DATA",
       "field": "PERSON-ID",
-      "statement_references": 3,
+      "statement_references": 6,
       "assignments": 2,
-      "reads": 1,
+      "reads": 4,
       "group_resets": 1,
       "ambiguous_references": 0,
       "referenced_by": [
@@ -2440,9 +2521,9 @@
       "pda": "NCCUGE-P",
       "structure": "P-CUSTOMER-DATA",
       "field": "BIRTH-DATE",
-      "statement_references": 5,
+      "statement_references": 8,
       "assignments": 3,
-      "reads": 2,
+      "reads": 5,
       "group_resets": 1,
       "ambiguous_references": 0,
       "referenced_by": [
@@ -2456,9 +2537,9 @@
       "pda": "NCCUGE-P",
       "structure": "P-CUSTOMER-DATA",
       "field": "SEX",
-      "statement_references": 1,
+      "statement_references": 4,
       "assignments": 1,
-      "reads": 0,
+      "reads": 3,
       "group_resets": 1,
       "ambiguous_references": 0,
       "referenced_by": [
@@ -2470,9 +2551,9 @@
       "pda": "NCCUGE-P",
       "structure": "P-CUSTOMER-DATA",
       "field": "SURNAME",
-      "statement_references": 12,
+      "statement_references": 15,
       "assignments": 3,
-      "reads": 9,
+      "reads": 12,
       "group_resets": 1,
       "ambiguous_references": 0,
       "referenced_by": [
@@ -2486,9 +2567,9 @@
       "pda": "NCCUGE-P",
       "structure": "P-CUSTOMER-DATA",
       "field": "FIRST-NAME-OLD",
-      "statement_references": 3,
+      "statement_references": 6,
       "assignments": 1,
-      "reads": 2,
+      "reads": 5,
       "group_resets": 1,
       "ambiguous_references": 0,
       "referenced_by": [
@@ -2502,9 +2583,9 @@
       "pda": "NCCUGE-P",
       "structure": "P-CUSTOMER-DATA",
       "field": "EMAIL",
-      "statement_references": 5,
+      "statement_references": 8,
       "assignments": 3,
-      "reads": 2,
+      "reads": 5,
       "group_resets": 1,
       "ambiguous_references": 0,
       "referenced_by": [
@@ -2518,9 +2599,9 @@
       "pda": "NCCUGE-P",
       "structure": "P-CUSTOMER-DATA",
       "field": "STREET-NUMBER",
-      "statement_references": 5,
+      "statement_references": 8,
       "assignments": 3,
-      "reads": 2,
+      "reads": 5,
       "group_resets": 1,
       "ambiguous_references": 0,
       "referenced_by": [
@@ -2534,9 +2615,9 @@
       "pda": "NCCUGE-P",
       "structure": "P-CUSTOMER-DATA",
       "field": "COUNTRY",
-      "statement_references": 1,
+      "statement_references": 4,
       "assignments": 1,
-      "reads": 0,
+      "reads": 3,
       "group_resets": 1,
       "ambiguous_references": 0,
       "referenced_by": [
@@ -2548,9 +2629,9 @@
       "pda": "NCCUGE-P",
       "structure": "P-CUSTOMER-DATA",
       "field": "ZIP-CODE",
-      "statement_references": 5,
+      "statement_references": 8,
       "assignments": 3,
-      "reads": 2,
+      "reads": 5,
       "group_resets": 1,
       "ambiguous_references": 0,
       "referenced_by": [
@@ -2564,9 +2645,9 @@
       "pda": "NCCUGE-P",
       "structure": "P-CUSTOMER-DATA",
       "field": "CITY",
-      "statement_references": 5,
+      "statement_references": 8,
       "assignments": 3,
-      "reads": 2,
+      "reads": 5,
       "group_resets": 1,
       "ambiguous_references": 0,
       "referenced_by": [
@@ -2580,9 +2661,9 @@
       "pda": "NCCUGE-P",
       "structure": "P-CUSTOMER-DATA",
       "field": "TIMESTAMP",
-      "statement_references": 3,
+      "statement_references": 6,
       "assignments": 3,
-      "reads": 0,
+      "reads": 3,
       "group_resets": 1,
       "ambiguous_references": 0,
       "referenced_by": [
@@ -2596,9 +2677,9 @@
       "pda": "NCCUGE-P",
       "structure": "P-CUSTOMER-DATA",
       "field": "FIRST-NAME-1",
-      "statement_references": 2,
+      "statement_references": 5,
       "assignments": 2,
-      "reads": 0,
+      "reads": 3,
       "group_resets": 1,
       "ambiguous_references": 0,
       "referenced_by": [
@@ -3463,6 +3544,11 @@
     "ddm_fields_never_referenced": 23,
     "ddm_fields_not_in_any_view": 17,
     "ddm_fields_ambiguous_reference": 0,
+    "ddm_fields_only_cleared_by_view_reset": [
+      "NCCONTRACT.DATE-CANCELLATION",
+      "NCCONTRACT.DATE-RESERVATION",
+      "NCCONTRACT.DID-CONDITIONS"
+    ],
     "unused_level1_variables": 15,
     "pda_fields_never_assigned": [
       "NCCOMM-P.P-LANG",
