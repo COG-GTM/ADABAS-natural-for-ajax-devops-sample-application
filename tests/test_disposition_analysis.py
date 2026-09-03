@@ -32,6 +32,8 @@ PDA_SRC = """\
         3 SURNAME (A20)
         3 FIRST-NAME-1 (U40)
       2 P-NOTE (A10)
+      2 TIMESTAMP (T)
+      2 WEEK-COUNT-IN (N2)
     END-DEFINE
 """
 
@@ -42,6 +44,7 @@ LDA_SRC = """\
       2 NAME
         3 SURNAME (A20)
         3 FIRST-NAME-OLD (A20)
+      2 TIMESTAMP (T)
     * 2 FIRST-NAME-1 (U40)
     1 #WORK (A10)
     END-DEFINE
@@ -52,9 +55,11 @@ SVC_SRC = """\
     PARAMETER USING FIX-PDA
     LOCAL USING FIX-LDA
     END-DEFINE
+    RESET P-CUSTOMER-DATA
     FIND (1) NCCUSTOMER WITH PERSON-ID = P-CUSTOMER-DATA.PERSON-ID
       MOVE NCCUSTOMER.SURNAME TO P-CUSTOMER-DATA.SURNAME
       MOVE FIRST-NAME-OLD TO NAME.FIRST-NAME-1
+      MOVE *TIMESTMP TO NCCUSTOMER.TIMESTAMP P-CUSTOMER-DATA.TIMESTAMP
       IF P-NOTE = 'X' THEN IGNORE END-IF
     END-FIND
     END
@@ -148,6 +153,37 @@ class SymbolResolutionFixtures(unittest.TestCase):
         self.assertEqual(rows["P-NOTE"]["reads"], 1)
         self.assertEqual(rows["SURNAME"]["referenced_by"], ["FIX-SVC"])
 
+    def test_multi_target_move_assigns_every_target(self):
+        line = "  MOVE *TIMESTMP TO NCCUSTOMER.TIMESTAMP P-CUSTOMER-DATA.TIMESTAMP"
+        spans = [(q, s, e) for q, s, e in ad._occurrences(line, "TIMESTAMP")]
+        self.assertEqual([q for q, _, _ in spans], ["NCCUSTOMER", "P-CUSTOMER-DATA"])
+        self.assertTrue(all(ad._is_assignment(line, s, e) for _, s, e in spans))
+        # the source operand of a MOVE is a read, not an assignment
+        src = "MOVE P-CUSTOMER-DATA.TIMESTAMP TO #WORK"
+        _, s, e = next(ad._occurrences(src, "TIMESTAMP"))
+        self.assertFalse(ad._is_assignment(src, s, e))
+        rows = {r["field"]: r for r in ad._pda_field_population(self.objs, self.refs)}
+        self.assertEqual(rows["TIMESTAMP"]["assignments"], 1)
+        self.assertEqual(rows["TIMESTAMP"]["reads"], 0)
+
+    def test_group_reset_is_not_a_value_assignment(self):
+        self.assertEqual(list(ad._group_reset_targets("RESET P-CUSTOMER-DATA")),
+                         [(None, "P-CUSTOMER-DATA")])
+        self.assertEqual(list(ad._group_reset_targets("  RESET A.X #B")),
+                         [("A", "X"), (None, "#B")])
+        self.assertEqual(list(ad._group_reset_targets("MOVE A TO B")), [])
+        rows = {r["field"]: r for r in ad._pda_field_population(self.objs, self.refs)}
+        # WEEK-COUNT-IN is only touched by the whole-structure RESET
+        self.assertEqual(rows["WEEK-COUNT-IN"]["assignments"], 0)
+        self.assertEqual(rows["WEEK-COUNT-IN"]["group_resets"], 1)
+        self.assertEqual(rows["WEEK-COUNT-IN"]["referenced_by"], ["FIX-SVC"])
+        self.assertEqual(rows["SURNAME"]["group_resets"], 1)
+        self.assertEqual(rows["SURNAME"]["assignments"], 1)
+        # a RESET of a scalar is an assignment of that scalar
+        line = "RESET P-CUSTOMER-DATA.P-NOTE"
+        _, s, e = next(ad._occurrences(line, "P-NOTE"))
+        self.assertTrue(ad._is_assignment(line, s, e))
+
 
 class ReferenceAndMarkerFixtures(unittest.TestCase):
     def test_dynamic_call_reported_separately(self):
@@ -180,6 +216,26 @@ class ReferenceAndMarkerFixtures(unittest.TestCase):
         """)
         self.assertEqual([l.strip() for l in ad._statement_lines(src)],
                          ["MOVE P-A TO P-B", "END"])
+
+    def test_executable_lines_exclude_declarations_but_keep_statements(self):
+        src = textwrap.dedent("""\
+            * header comment
+            DEFINE DATA
+            PARAMETER USING FIX-PDA
+            LOCAL
+            1 #A (A1)      /* trailing comment
+            1 #B (A1)
+            END-DEFINE
+
+            CALLNAT 'X' #A
+            MOVE #A TO #B  /* keep
+            * MOVE #B TO #A
+            END
+        """)
+        self.assertEqual([l.strip() for l in ad._executable_lines(src)],
+                         ["CALLNAT 'X' #A", "MOVE #A TO #B", "END"])
+        no_data = "MOVE 1 TO #A\nEND\n"
+        self.assertEqual(len(ad._executable_lines(no_data)), 2)
 
     def test_markers_ignore_ordinary_german_text(self):
         objs = {"MSG": _obj("MSG", "subprogram", """\
@@ -287,6 +343,12 @@ class DispositionControlTotals(unittest.TestCase):
 
     def test_ui_events_all_handled(self):
         self.assertEqual(self.ct["ui_events_declared"], 27)
+        # onpvLineClick is bound to both onclickmethod and ondblclickmethod
+        self.assertEqual(self.ct["ui_event_declarations"], 28)
+        self.assertEqual(sum(r["declared_in_ui"] for r in self.result["ui_events"]),
+                         self.ct["ui_event_declarations"])
+        by_event = {r["event"]: r["declared_in_ui"] for r in self.result["ui_events"]}
+        self.assertEqual(by_event["onpvLineClick"], 2)
         self.assertEqual(self.ct["ui_events_unhandled"], [])
 
 

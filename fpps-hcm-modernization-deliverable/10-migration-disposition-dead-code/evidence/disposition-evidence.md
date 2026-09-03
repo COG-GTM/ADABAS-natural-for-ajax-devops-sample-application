@@ -29,9 +29,10 @@ sources under `SunnyIslands/Natural-Libraries/`. **Do not edit by hand.**
 | DDM fields not exposed in any view (subset of the above) | 17 |
 | DDM fields with an ambiguous unqualified reference (excluded) | 0 |
 | Level-1 variables declared but unused | 15 |
-| PDA fields never assigned anywhere | NCCOMM-P.P-LANG, NCCOMM-P.P-PASSWORD, NCCOMM-P.P-USER, NCCONW-P.DATE-BOOKING-IN, NCCONW-P.DATE-RESERVATION-IN, NCCONW-P.WEEK-COUNT-IN, NCCRUL-P.P-DESTHARBOR |
+| PDA fields never assigned a value anywhere | NCCOMM-P.P-LANG, NCCOMM-P.P-PASSWORD, NCCOMM-P.P-USER, NCCONW-P.DATE-BOOKING-IN, NCCONW-P.DATE-RESERVATION-IN, NCCONW-P.WEEK-COUNT-IN, NCCRUL-P.P-DESTHARBOR |
+| … of which only cleared by a whole-structure RESET | NCCONW-P.DATE-BOOKING-IN, NCCONW-P.DATE-RESERVATION-IN, NCCONW-P.WEEK-COUNT-IN |
 | Commented-out executable statements | 81 |
-| UI events declared / unhandled in adapter | 27 / none |
+| Distinct UI event methods / declarations in XML / unhandled in adapter | 27 / 28 / none |
 
 ## Object reachability from the NJX page adapter
 
@@ -279,49 +280,51 @@ same-named PDA/LDA/GDA fields are not counted as database usage.
 
 Scalar fields of every PDA that is actually `USING`-referenced.
 Zero assignments means the field is declared in a service contract
-but never populated by any caller or service (heuristic: MOVE/
-COMPRESS INTO/:=/RESET targets count as assignments).
+but never given a value by any caller or service (every target of
+MOVE … TO / COMPRESS … INTO / := / RESET counts as an assignment).
+A RESET of the enclosing structure clears the field without giving
+it a value; those are counted separately as group resets.
 
-| PDA | Structure | Field | Statement refs | Assignments | Reads | Referenced by |
-|---|---|---|---|---|---|---|
-| `NCCOMM-P` | `P-COM` | `P-LANG` | 6 | 0 | 6 | `CONEW-N`, `CRGET-N`, `CRLIST-N`, `CUGET-N`, `CUMOD-N`, `CUNEW-N` |
-| `NCCOMM-P` | `P-COM` | `P-USER` | 0 | 0 | 0 | — |
-| `NCCOMM-P` | `P-COM` | `P-PASSWORD` | 0 | 0 | 0 | — |
-| `NCCOMM-P` | `P-RESPONSE` | `P-RSPCODE` | 31 | 8 | 23 | `CONEW-N`, `CRGET-N`, `CRLIST-N`, `CUGET-N`, `CUMOD-N`, `CUNEW-N`, `RDCRUISP` |
-| `NCCOMM-P` | `P-RESPONSE` | `P-RSPTXT` | 16 | 6 | 10 | `CONEW-N`, `CRGET-N`, `CRLIST-N`, `CUGET-N`, `CUMOD-N`, `CUNEW-N`, `RDCRUISP` |
-| `NCCONW-P` | `P-CONTRACT-DATA` | `WEEK-COUNT-IN` | 0 | 0 | 0 | — |
-| `NCCONW-P` | `P-CONTRACT-DATA` | `DATE-RESERVATION-IN` | 0 | 0 | 0 | — |
-| `NCCONW-P` | `P-CONTRACT-DATA` | `DATE-BOOKING-IN` | 0 | 0 | 0 | — |
-| `NCCONW-P` | `P-CONTRACT-DATA` | `ID-CUSTOMER-IN` | 5 | 1 | 4 | `CONEW-N`, `RDCRUISP` |
-| `NCCONW-P` | `P-CONTRACT-DATA` | `ID-CRUISE-IN` | 5 | 1 | 4 | `CONEW-N`, `RDCRUISP` |
-| `NCCRUL-P` | `P-SELETION` | `P-STARTHARBOR` | 7 | 5 | 2 | `CRLIST-N`, `RDCRUISP` |
-| `NCCRUL-P` | `P-SELETION` | `P-DESTHARBOR` | 2 | 0 | 2 | `CRLIST-N` |
-| `NCCRUL-P` | `P-CRUISE-DATA` | `CRUISE-ID` | 4 | 1 | 3 | `CRGET-N`, `RDCRUISP` |
-| `NCCRUL-P` | `P-CRUISE-DATA` | `START-DATE` | 10 | 3 | 7 | `CRGET-N`, `CRLIST-N`, `RDCRUISP` |
-| `NCCRUL-P` | `P-CRUISE-DATA` | `END-DATE` | 9 | 3 | 6 | `CRGET-N`, `CRLIST-N`, `RDCRUISP` |
-| `NCCRUL-P` | `P-CRUISE-DATA` | `START-HARBOR` | 7 | 1 | 6 | `CRGET-N`, `RDCRUISP` |
-| `NCCRUL-P` | `P-CRUISE-DATA` | `DESTINATION-HARBOR` | 7 | 1 | 6 | `CRGET-N`, `RDCRUISP` |
-| `NCCRUL-P` | `P-CRUISE-DATA` | `YACHT-NAME` | 7 | 2 | 5 | `CRGET-N`, `CRLIST-N`, `RDCRUISP` |
-| `NCCRUL-P` | `P-CRUISE-DATA` | `PRICE-1W` | 4 | 3 | 1 | `CRGET-N`, `CRLIST-N` |
-| `NCCRUL-P` | `P-CRUISE-DATA` | `PRICE-2W` | 4 | 3 | 1 | `CRGET-N`, `CRLIST-N` |
-| `NCCRUL-P` | `P-CRUISE-DATA` | `PRICE-3W` | 4 | 3 | 1 | `CRGET-N`, `CRLIST-N` |
-| `NCCRUL-P` | `P-CRUISE-DATA` | `PRICE` | 11 | 5 | 6 | `CRGET-N`, `RDCRUISP` |
-| `NCCRUL-P` | `P-CRUISE-DATA` | `PICTURE` | 1 | 1 | 0 | `CRGET-N` |
-| `NCCRUL-P` | `P-CRUISE-DATA` | `PICTURELEN` | 6 | 1 | 5 | `CRGET-N`, `RDCRUISP` |
-| `NCCUGE-P` | `P-SELECTION` | `P-PERSON-ID` | 7 | 3 | 4 | `CUGET-N`, `CUMOD-N`, `RDCRUISP` |
-| `NCCUGE-P` | `P-SELECTION` | `P-TIMESTAMP` | 2 | 1 | 1 | `CUMOD-N`, `RDCRUISP` |
-| `NCCUGE-P` | `P-CUSTOMER-DATA` | `PERSON-ID` | 3 | 2 | 1 | `CUGET-N`, `CUNEW-N` |
-| `NCCUGE-P` | `P-CUSTOMER-DATA` | `BIRTH-DATE` | 5 | 3 | 2 | `CUGET-N`, `CUMOD-N`, `CUNEW-N`, `RDCRUISP` |
-| `NCCUGE-P` | `P-CUSTOMER-DATA` | `SEX` | 1 | 1 | 0 | `CUGET-N` |
-| `NCCUGE-P` | `P-CUSTOMER-DATA` | `SURNAME` | 12 | 3 | 9 | `CUGET-N`, `CUMOD-N`, `CUNEW-N`, `RDCRUISP` |
-| `NCCUGE-P` | `P-CUSTOMER-DATA` | `FIRST-NAME-OLD` | 3 | 1 | 2 | `CUGET-N`, `CUMOD-N`, `CUNEW-N` |
-| `NCCUGE-P` | `P-CUSTOMER-DATA` | `EMAIL` | 5 | 3 | 2 | `CUGET-N`, `CUMOD-N`, `CUNEW-N`, `RDCRUISP` |
-| `NCCUGE-P` | `P-CUSTOMER-DATA` | `STREET-NUMBER` | 5 | 3 | 2 | `CUGET-N`, `CUMOD-N`, `CUNEW-N`, `RDCRUISP` |
-| `NCCUGE-P` | `P-CUSTOMER-DATA` | `COUNTRY` | 1 | 1 | 0 | `CUGET-N` |
-| `NCCUGE-P` | `P-CUSTOMER-DATA` | `ZIP-CODE` | 5 | 3 | 2 | `CUGET-N`, `CUMOD-N`, `CUNEW-N`, `RDCRUISP` |
-| `NCCUGE-P` | `P-CUSTOMER-DATA` | `CITY` | 5 | 3 | 2 | `CUGET-N`, `CUMOD-N`, `CUNEW-N`, `RDCRUISP` |
-| `NCCUGE-P` | `P-CUSTOMER-DATA` | `TIMESTAMP` | 3 | 1 | 2 | `CUGET-N`, `CUMOD-N`, `CUNEW-N` |
-| `NCCUGE-P` | `P-CUSTOMER-DATA` | `FIRST-NAME-1` | 2 | 2 | 0 | `RDCRUISP` |
+| PDA | Structure | Field | Statement refs | Assignments | Reads | Group resets | Referenced by |
+|---|---|---|---|---|---|---|---|
+| `NCCOMM-P` | `P-COM` | `P-LANG` | 6 | 0 | 6 | 0 | `CONEW-N`, `CRGET-N`, `CRLIST-N`, `CUGET-N`, `CUMOD-N`, `CUNEW-N` |
+| `NCCOMM-P` | `P-COM` | `P-USER` | 0 | 0 | 0 | 0 | — |
+| `NCCOMM-P` | `P-COM` | `P-PASSWORD` | 0 | 0 | 0 | 0 | — |
+| `NCCOMM-P` | `P-RESPONSE` | `P-RSPCODE` | 31 | 8 | 23 | 0 | `CONEW-N`, `CRGET-N`, `CRLIST-N`, `CUGET-N`, `CUMOD-N`, `CUNEW-N`, `RDCRUISP` |
+| `NCCOMM-P` | `P-RESPONSE` | `P-RSPTXT` | 16 | 6 | 10 | 0 | `CONEW-N`, `CRGET-N`, `CRLIST-N`, `CUGET-N`, `CUMOD-N`, `CUNEW-N`, `RDCRUISP` |
+| `NCCONW-P` | `P-CONTRACT-DATA` | `WEEK-COUNT-IN` | 0 | 0 | 0 | 1 | `RDCRUISP` |
+| `NCCONW-P` | `P-CONTRACT-DATA` | `DATE-RESERVATION-IN` | 0 | 0 | 0 | 1 | `RDCRUISP` |
+| `NCCONW-P` | `P-CONTRACT-DATA` | `DATE-BOOKING-IN` | 0 | 0 | 0 | 1 | `RDCRUISP` |
+| `NCCONW-P` | `P-CONTRACT-DATA` | `ID-CUSTOMER-IN` | 5 | 1 | 4 | 1 | `CONEW-N`, `RDCRUISP` |
+| `NCCONW-P` | `P-CONTRACT-DATA` | `ID-CRUISE-IN` | 5 | 1 | 4 | 1 | `CONEW-N`, `RDCRUISP` |
+| `NCCRUL-P` | `P-SELETION` | `P-STARTHARBOR` | 7 | 5 | 2 | 0 | `CRLIST-N`, `RDCRUISP` |
+| `NCCRUL-P` | `P-SELETION` | `P-DESTHARBOR` | 2 | 0 | 2 | 0 | `CRLIST-N` |
+| `NCCRUL-P` | `P-CRUISE-DATA` | `CRUISE-ID` | 4 | 1 | 3 | 0 | `CRGET-N`, `RDCRUISP` |
+| `NCCRUL-P` | `P-CRUISE-DATA` | `START-DATE` | 10 | 3 | 7 | 0 | `CRGET-N`, `CRLIST-N`, `RDCRUISP` |
+| `NCCRUL-P` | `P-CRUISE-DATA` | `END-DATE` | 9 | 3 | 6 | 0 | `CRGET-N`, `CRLIST-N`, `RDCRUISP` |
+| `NCCRUL-P` | `P-CRUISE-DATA` | `START-HARBOR` | 7 | 1 | 6 | 0 | `CRGET-N`, `RDCRUISP` |
+| `NCCRUL-P` | `P-CRUISE-DATA` | `DESTINATION-HARBOR` | 7 | 1 | 6 | 0 | `CRGET-N`, `RDCRUISP` |
+| `NCCRUL-P` | `P-CRUISE-DATA` | `YACHT-NAME` | 7 | 2 | 5 | 0 | `CRGET-N`, `CRLIST-N`, `RDCRUISP` |
+| `NCCRUL-P` | `P-CRUISE-DATA` | `PRICE-1W` | 4 | 3 | 1 | 0 | `CRGET-N`, `CRLIST-N` |
+| `NCCRUL-P` | `P-CRUISE-DATA` | `PRICE-2W` | 4 | 3 | 1 | 0 | `CRGET-N`, `CRLIST-N` |
+| `NCCRUL-P` | `P-CRUISE-DATA` | `PRICE-3W` | 4 | 3 | 1 | 0 | `CRGET-N`, `CRLIST-N` |
+| `NCCRUL-P` | `P-CRUISE-DATA` | `PRICE` | 11 | 5 | 6 | 0 | `CRGET-N`, `RDCRUISP` |
+| `NCCRUL-P` | `P-CRUISE-DATA` | `PICTURE` | 1 | 1 | 0 | 0 | `CRGET-N` |
+| `NCCRUL-P` | `P-CRUISE-DATA` | `PICTURELEN` | 6 | 1 | 5 | 0 | `CRGET-N`, `RDCRUISP` |
+| `NCCUGE-P` | `P-SELECTION` | `P-PERSON-ID` | 7 | 3 | 4 | 0 | `CUGET-N`, `CUMOD-N`, `RDCRUISP` |
+| `NCCUGE-P` | `P-SELECTION` | `P-TIMESTAMP` | 2 | 1 | 1 | 0 | `CUMOD-N`, `RDCRUISP` |
+| `NCCUGE-P` | `P-CUSTOMER-DATA` | `PERSON-ID` | 3 | 2 | 1 | 1 | `CUGET-N`, `CUNEW-N`, `RDCRUISP` |
+| `NCCUGE-P` | `P-CUSTOMER-DATA` | `BIRTH-DATE` | 5 | 3 | 2 | 1 | `CUGET-N`, `CUMOD-N`, `CUNEW-N`, `RDCRUISP` |
+| `NCCUGE-P` | `P-CUSTOMER-DATA` | `SEX` | 1 | 1 | 0 | 1 | `CUGET-N`, `RDCRUISP` |
+| `NCCUGE-P` | `P-CUSTOMER-DATA` | `SURNAME` | 12 | 3 | 9 | 1 | `CUGET-N`, `CUMOD-N`, `CUNEW-N`, `RDCRUISP` |
+| `NCCUGE-P` | `P-CUSTOMER-DATA` | `FIRST-NAME-OLD` | 3 | 1 | 2 | 1 | `CUGET-N`, `CUMOD-N`, `CUNEW-N`, `RDCRUISP` |
+| `NCCUGE-P` | `P-CUSTOMER-DATA` | `EMAIL` | 5 | 3 | 2 | 1 | `CUGET-N`, `CUMOD-N`, `CUNEW-N`, `RDCRUISP` |
+| `NCCUGE-P` | `P-CUSTOMER-DATA` | `STREET-NUMBER` | 5 | 3 | 2 | 1 | `CUGET-N`, `CUMOD-N`, `CUNEW-N`, `RDCRUISP` |
+| `NCCUGE-P` | `P-CUSTOMER-DATA` | `COUNTRY` | 1 | 1 | 0 | 1 | `CUGET-N`, `RDCRUISP` |
+| `NCCUGE-P` | `P-CUSTOMER-DATA` | `ZIP-CODE` | 5 | 3 | 2 | 1 | `CUGET-N`, `CUMOD-N`, `CUNEW-N`, `RDCRUISP` |
+| `NCCUGE-P` | `P-CUSTOMER-DATA` | `CITY` | 5 | 3 | 2 | 1 | `CUGET-N`, `CUMOD-N`, `CUNEW-N`, `RDCRUISP` |
+| `NCCUGE-P` | `P-CUSTOMER-DATA` | `TIMESTAMP` | 3 | 3 | 0 | 1 | `CUGET-N`, `CUMOD-N`, `CUNEW-N`, `RDCRUISP` |
+| `NCCUGE-P` | `P-CUSTOMER-DATA` | `FIRST-NAME-1` | 2 | 2 | 0 | 1 | `RDCRUISP` |
 
 ## Commented-out executable statements
 

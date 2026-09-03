@@ -102,7 +102,7 @@ def _objects():
             "path": rel,
             "lines": len(src.splitlines()),
             "executable_lines": (
-                len(sp.strip_comments(src)) if otype in CODE_TYPES else None
+                len(_executable_lines(src)) if otype in CODE_TYPES else None
             ),
             "_src": src,
         }
@@ -283,15 +283,11 @@ def _scopes(objs, refs):
     return scopes
 
 
-def _statement_lines(src):
-    """Executable lines outside DEFINE DATA and outside CALLNAT parameter
-    lists (a field passed as a CALLNAT operand is neither read nor assigned
-    by the caller in any way this analysis can attribute)."""
+def _executable_lines(src):
+    """Non-comment, non-blank lines outside the ``DEFINE DATA`` block, i.e.
+    the statements that carry behaviour rather than declarations."""
     out = []
     in_define = False
-    callnat_indent = None
-    operand_only = re.compile(
-        r"^\s*(?:" + _IDENT + r"+(?:\.[A-Z0-9#@$&\-]+)?(?:\([^)]*\))?\s*)+$")
     for line in sp.strip_comments(src):
         st = line.strip()
         if st.startswith("DEFINE DATA"):
@@ -300,6 +296,20 @@ def _statement_lines(src):
             if st.startswith("END-DEFINE"):
                 in_define = False
             continue
+        out.append(line)
+    return out
+
+
+def _statement_lines(src):
+    """Executable lines outside CALLNAT parameter lists (a field passed as a
+    CALLNAT operand is neither read nor assigned by the caller in any way
+    this analysis can attribute)."""
+    out = []
+    callnat_indent = None
+    operand_only = re.compile(
+        r"^\s*(?:" + _IDENT + r"+(?:\.[A-Z0-9#@$&\-]+)?(?:\([^)]*\))?\s*)+$")
+    for line in _executable_lines(src):
+        st = line.strip()
         indent = len(line) - len(line.lstrip())
         if callnat_indent is not None:
             if indent > callnat_indent and operand_only.match(line):
@@ -364,13 +374,39 @@ def _resolve(qualifier, field, scope, line=""):
     return hits
 
 
+# Everything after the last ``TO`` / ``INTO`` of a MOVE, ADD, COMPRESS,
+# EXAMINE ... GIVING etc., or after a leading ``RESET``, is a list of
+# assignment targets: ``MOVE *TIMESTMP TO A.X B.X`` writes both operands.
+_TARGET_LIST_RE = re.compile(
+    r"(?:\b(?:TO|INTO)\s+|^\s*(?:RESET(?:\s+INITIAL)?)\s+)"
+    r"(?P<targets>(?:" + _IDENT + r"+(?:\." + _IDENT + r"+)?(?:\s*\([^)]*\))?\s*)+)$")
+
+
+def _target_span(line):
+    """``(start, end)`` of the trailing assignment-target list in ``line``,
+    or None when the statement assigns nothing."""
+    m = None
+    for m in _TARGET_LIST_RE.finditer(line):
+        pass
+    return m.span("targets") if m else None
+
+
 def _is_assignment(line, start, end):
-    before = line[:start]
-    after = line[end:]
-    return bool(
-        re.search(r"\b(TO|INTO|RESET)\s+(?:" + _IDENT + r"+\.)?$", before)
-        or re.match(r"\s*:=", after)
-    )
+    if re.match(r"\s*:=", line[end:]):
+        return True
+    span = _target_span(line)
+    return bool(span and span[0] <= start and end <= span[1])
+
+
+def _group_reset_targets(line):
+    """Yield ``(qualifier, name)`` for every operand of a ``RESET`` statement
+    — each may be a scalar, a group or a level-1 structure."""
+    m = re.match(r"^\s*RESET(?:\s+INITIAL)?\s+(.*)$", line)
+    if not m:
+        return
+    for t in re.finditer(r"(?:(?P<q>" + _IDENT + r"+)\.)?(?P<n>" + _IDENT + r"+)",
+                         m.group(1)):
+        yield t.group("q"), t.group("n")
 
 
 def _ddm_field_usage(objs, refs):
@@ -464,16 +500,27 @@ def _pda_field_population(objs, refs):
         if o["type"] != "parameter data area" or name not in used_pdas:
             continue
         for s in _structures(o["_src"], name):
-            for field, level, is_group, _ in s["fields"]:
+            for field, level, is_group, quals in s["fields"]:
                 if is_group:
                     continue
-                hits = assigned = ambiguous = 0
+                hits = assigned = ambiguous = group_resets = 0
                 users = set()
                 for obj, scope in scopes.items():
                     if not any(v["owner"] == name and v["name"] == s["name"]
                                for v in scope):
                         continue
                     for line in stmt_lines[obj]:
+                        for q, target in _group_reset_targets(line):
+                            if target not in quals:
+                                continue
+                            if target == s["name"]:
+                                owners = [v for v in scope if v["name"] == target]
+                            else:
+                                owners = _resolve(q, target, scope, line)
+                            if len(owners) == 1 and owners[0]["owner"] == name \
+                                    and owners[0]["name"] == s["name"]:
+                                group_resets += 1
+                                users.add(obj)
                         for q, start, end in _occurrences(line, field):
                             res = _resolve(q, field, scope, line)
                             mine = [h for h in res if h["owner"] == name
@@ -492,6 +539,7 @@ def _pda_field_population(objs, refs):
                     "statement_references": hits,
                     "assignments": assigned,
                     "reads": hits - assigned,
+                    "group_resets": group_resets,
                     "ambiguous_references": ambiguous,
                     "referenced_by": sorted(users),
                 })
@@ -578,6 +626,10 @@ def control_totals(result):
         f"{r['pda']}.{r['field']}" for r in result["pda_field_population"]
         if r["assignments"] == 0
     ]
+    only_reset = [
+        f"{r['pda']}.{r['field']}" for r in result["pda_field_population"]
+        if r["assignments"] == 0 and r["group_resets"]
+    ]
     return {
         "objects": len(result["inventory"]),
         "code_objects": sum(1 for o in result["inventory"]
@@ -599,8 +651,10 @@ def control_totals(result):
             1 for r in result["ddm_field_usage"] if r["ambiguous_in"]),
         "unused_level1_variables": len(result["unused_level1_variables"]),
         "pda_fields_never_assigned": sorted(never_populated),
+        "pda_fields_only_cleared_by_group_reset": sorted(only_reset),
         "commented_out_statements": len(result["commented_out_statements"]),
         "ui_events_declared": len(result["ui_events"]),
+        "ui_event_declarations": sum(r["declared_in_ui"] for r in result["ui_events"]),
         "ui_events_unhandled": sorted(
             r["event"] for r in result["ui_events"] if not r["handled_in_adapter"]),
     }
@@ -650,10 +704,13 @@ def render_markdown(result):
         ("DDM fields not exposed in any view (subset of the above)", ct["ddm_fields_not_in_any_view"]),
         ("DDM fields with an ambiguous unqualified reference (excluded)", ct["ddm_fields_ambiguous_reference"]),
         ("Level-1 variables declared but unused", ct["unused_level1_variables"]),
-        ("PDA fields never assigned anywhere", ", ".join(ct["pda_fields_never_assigned"]) or "none"),
+        ("PDA fields never assigned a value anywhere", ", ".join(ct["pda_fields_never_assigned"]) or "none"),
+        ("… of which only cleared by a whole-structure RESET",
+         ", ".join(ct["pda_fields_only_cleared_by_group_reset"]) or "none"),
         ("Commented-out executable statements", ct["commented_out_statements"]),
-        ("UI events declared / unhandled in adapter",
-         f"{ct['ui_events_declared']} / {', '.join(ct['ui_events_unhandled']) or 'none'}"),
+        ("Distinct UI event methods / declarations in XML / unhandled in adapter",
+         f"{ct['ui_events_declared']} / {ct['ui_event_declarations']} / "
+         f"{', '.join(ct['ui_events_unhandled']) or 'none'}"),
     ])
     L += ["", "## Object reachability from the NJX page adapter", ""]
     L += _md_table(["Object", "Type", "Library", "Callers", "Status"], [
@@ -709,12 +766,15 @@ def render_markdown(result):
     L += ["", "## PDA interface fields: assignments vs reads", "",
           "Scalar fields of every PDA that is actually `USING`-referenced.",
           "Zero assignments means the field is declared in a service contract",
-          "but never populated by any caller or service (heuristic: MOVE/",
-          "COMPRESS INTO/:=/RESET targets count as assignments).", ""]
+          "but never given a value by any caller or service (every target of",
+          "MOVE … TO / COMPRESS … INTO / := / RESET counts as an assignment).",
+          "A RESET of the enclosing structure clears the field without giving",
+          "it a value; those are counted separately as group resets.", ""]
     L += _md_table(["PDA", "Structure", "Field", "Statement refs", "Assignments",
-                    "Reads", "Referenced by"], [
+                    "Reads", "Group resets", "Referenced by"], [
         (f"`{r['pda']}`", f"`{r['structure']}`", f"`{r['field']}`",
          r["statement_references"], r["assignments"], r["reads"],
+         r["group_resets"],
          ", ".join(f"`{u}`" for u in r["referenced_by"]) or "—")
         for r in result["pda_field_population"]
     ])
