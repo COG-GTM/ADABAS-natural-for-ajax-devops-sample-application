@@ -229,6 +229,11 @@ RULES = [
      "fpps-hcm-modernization-deliverable/README.md",
      lambda ev: _file(ev, "test_deliverable_links.py")
      and _has(ev, "hub_and_all_capability_directories")),
+    ("PKG-GENERATORS", "package integrity",
+     "Every capability generator is inventoried (bidirectionally) and its "
+     "committed artifacts match a fresh --check run",
+     "fpps-hcm-modernization-deliverable/*/generate_*.py",
+     lambda ev: _file(ev, "test_deliverable_generators.py")),
 ]
 
 RULE_INDEX = {r[0]: r for r in RULES}
@@ -260,6 +265,8 @@ FILE_CLASS = {
                                      "tools/analyze_disposition.py"),
     "test_deliverable_links.py": ("Package integrity",
                                   "fpps-hcm-modernization-deliverable/**/*.md"),
+    "test_deliverable_generators.py": ("Package integrity",
+                                       "fpps-hcm-modernization-deliverable/**/*.py --check"),
 }
 
 
