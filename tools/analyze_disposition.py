@@ -56,10 +56,10 @@ UI_ROOT = "RDCRUISP"
 
 
 _CALL_RE = re.compile(
-    r"\b(CALLNAT|FETCH(?:\s+RETURN)?|INCLUDE|PERFORM)\s+(?:'([A-Z0-9#@$&\-]+)'"
-    r"|\"([A-Z0-9#@$&\-]+)\"|([A-Z0-9#@$&\-]+))"
+    r"\b(CALLNAT|FETCH(?:\s+RETURN)?|INCLUDE|PERFORM)\s+(?:'([A-Z0-9#@$&_\-]+)'"
+    r"|\"([A-Z0-9#@$&_\-]+)\"|([A-Z0-9#@$&_\-]+))"
 )
-_USING_RE = re.compile(r"\bUSING\s+([A-Z0-9#@$&\-]+)")
+_USING_RE = re.compile(r"\bUSING\s+([A-Z0-9#@$&_\-]+)")
 _COMMENTED_STMT_RE = re.compile(
     r"^\s*\*+\s*(MOVE|CALLNAT|PERFORM|RESET|COMPRESS|IF|FETCH|INCLUDE|"
     r"ASSIGN|ADD|SUBTRACT|DECIDE|READ|FIND|UPDATE|STORE|DELETE|WRITE|"
@@ -71,10 +71,10 @@ _MARKER_RE = re.compile(
     re.IGNORECASE,
 )
 _DATA_FIELD_RE = re.compile(
-    r"^\s*([1-9])\s+([A-Z#][A-Z0-9#@$&\-]*)\s*(?P<fmt>\()?")
-_VIEW_OF_RE = re.compile(r"\bVIEW\s+OF\s+([A-Z0-9#@$&\-]+)")
+    r"^\s*([1-9])\s+([A-Z#][A-Z0-9#@$&_\-]*)\s*(?P<fmt>\()?")
+_VIEW_OF_RE = re.compile(r"\bVIEW\s+OF\s+([A-Z0-9#@$&_\-]+)")
 _UI_METHOD_RE = re.compile(r'method="([A-Za-z0-9_]+)"')
-_IDENT = r"[A-Z0-9#@$&\-]"
+_IDENT = r"[A-Z0-9#@$&_\-]"
 
 
 def _objects():
@@ -308,7 +308,7 @@ def _statement_lines(src):
     out = []
     callnat_indent = None
     operand_only = re.compile(
-        r"^\s*(?:" + _IDENT + r"+(?:\.[A-Z0-9#@$&\-]+)?(?:\([^)]*\))?\s*)+$")
+        r"^\s*(?:" + _IDENT + r"+(?:\.[A-Z0-9#@$&_\-]+)?(?:\([^)]*\))?\s*)+$")
     for line in _executable_lines(src):
         st = line.strip()
         indent = len(line) - len(line.lstrip())
@@ -338,7 +338,7 @@ def _occurrences(line, field):
     ``line`` — skipping Natural system variables (``*FIELD``) and keyword
     phrases such as ``MOVE BY NAME``."""
     pat = re.compile(
-        r"(?<![A-Z0-9#@$&\-.*])(?:(?P<q>" + _IDENT + r"+)\.)?"
+        r"(?<![A-Z0-9#@$&_\-.*])(?:(?P<q>" + _IDENT + r"+)\.)?"
         + re.escape(field) + r"(?!" + _IDENT + r")")
     keyword_spans = [m.span() for m in _KEYWORD_PHRASE_RE.finditer(line)]
     for m in pat.finditer(line):
@@ -375,28 +375,65 @@ def _resolve(qualifier, field, scope, line=""):
     return hits
 
 
-# Everything after the last ``TO`` / ``INTO`` of a MOVE, ADD, COMPRESS,
-# EXAMINE ... GIVING etc., or after a leading ``RESET``, is a list of
-# assignment targets: ``MOVE *TIMESTMP TO A.X B.X`` writes both operands.
-_TARGET_LIST_RE = re.compile(
-    r"(?:\b(?:TO|INTO)\s+|^\s*(?:RESET(?:\s+INITIAL)?)\s+)"
-    r"(?P<targets>(?:" + _IDENT + r"+(?:\." + _IDENT + r"+)?(?:\s*\([^)]*\))?\s*)+)$")
+# Operand lists that a Natural statement *writes*.  Each form names the
+# operands it assigns; everything else on the line is read.
+_OPERAND = (
+    r"(?!(?:LEAVING|WITH|IGNORE|END-IF|REMAINDER|GIVING|TO|INTO|FROM|BY)\b)"
+    + _IDENT + r"+(?:\." + _IDENT + r"+)?(?:\s*\([^)]*\))?")
+_LIST = r"(?P<targets>(?:" + _OPERAND + r"\s*)+)"
+# clauses that may follow the target list of MOVE/COMPRESS/SEPARATE/RESET
+_TRAILER = r"(?:\s*(?:LEAVING|WITH|IGNORE|END-IF)\b.*)?$"
+# MOVE/ADD/COMPRESS/SEPARATE ... TO|INTO list, SUBTRACT ... FROM list, RESET list
+_TO_LIST_RE = re.compile(
+    r"(?:\b(?:TO|INTO)\s+|^\s*RESET(?:\s+INITIAL)?\s+)" + _LIST + _TRAILER)
+_FROM_LIST_RE = re.compile(r"^\s*SUBTRACT\b.*\bFROM\s+" + _LIST + _TRAILER)
+# ADD/SUBTRACT/MULTIPLY/DIVIDE/EXAMINE ... GIVING [NUMBER|POSITION|...] list
+# [REMAINDER r] — the arithmetic operands themselves are then left unchanged
+_GIVING_RE = re.compile(
+    r"\bGIVING\s+(?:(?:NUMBER|POSITION|LENGTH|INDEX)\s+)?" + _LIST
+    + r"(?:\s*REMAINDER\s+(?P<rem>" + _OPERAND + r"))?" + _TRAILER)
+# COMPUTE/ASSIGN [ROUNDED] list = expr ; MULTIPLY [ROUNDED] list BY expr
+_EQUALS_RE = re.compile(
+    r"^\s*(?:COMPUTE|ASSIGN)(?:\s+ROUNDED)?\s+" + _LIST + r"=(?!=)")
+_MULTIPLY_RE = re.compile(r"^\s*MULTIPLY(?:\s+ROUNDED)?\s+" + _LIST + r"BY\b")
+# FOR var [=|:=] from TO to — only the loop variable is written
+_FOR_RE = re.compile(r"^\s*FOR\s+(?P<targets>" + _OPERAND + r")")
+# EXAMINE [FULL] operand FOR ... DELETE|REPLACE modifies the operand
+_EXAMINE_RE = re.compile(
+    r"^\s*EXAMINE\s+(?:FULL\s+(?:VALUE\s+(?:OF\s+)?)?)?(?:SUBSTRING\s*\(\s*)?"
+    r"(?P<targets>" + _OPERAND + r")(?=.*\b(?:DELETE|REPLACE)\b)")
+# INPUT ... and READ WORK FILE n ... fill every operand that follows
+_FILL_RE = re.compile(
+    r"^\s*(?:INPUT\b(?:\s*\([^)]*\))?|READ\s+WORK\s+(?:FILE\s+)?\d+"
+    r"(?:\s+ONCE)?(?:\s+RECORD)?)\s*(?P<targets>.*)$")
 
 
-def _target_span(line):
-    """``(start, end)`` of the trailing assignment-target list in ``line``,
-    or None when the statement assigns nothing."""
+def _target_spans(line):
+    """``[(start, end), ...]`` of the operand lists that ``line`` assigns
+    (empty when the statement writes nothing)."""
+    m = _GIVING_RE.search(line)
+    if m:
+        spans = [m.span("targets")]
+        if m.group("rem"):
+            spans.append(m.span("rem"))
+        return spans
+    for rx in (_EQUALS_RE, _MULTIPLY_RE, _FOR_RE, _EXAMINE_RE, _FILL_RE):
+        m = rx.match(line)
+        if m:
+            return [m.span("targets")]
+    m = _FROM_LIST_RE.match(line)
+    if m:
+        return [m.span("targets")]
     m = None
-    for m in _TARGET_LIST_RE.finditer(line):
+    for m in _TO_LIST_RE.finditer(line):
         pass
-    return m.span("targets") if m else None
+    return [m.span("targets")] if m else []
 
 
 def _is_assignment(line, start, end):
     if re.match(r"\s*:=", line[end:]):
         return True
-    span = _target_span(line)
-    return bool(span and span[0] <= start and end <= span[1])
+    return any(a <= start and end <= b for a, b in _target_spans(line))
 
 
 def _group_reset_targets(line):
@@ -522,8 +559,8 @@ def _ddm_field_usage(objs, refs):
 
 
 def _count_refs(name, code):
-    return len(re.findall(r"(?<![A-Z0-9#@$&\-.])" + re.escape(name)
-                          + r"(?![A-Z0-9#@$&\-])", code))
+    return len(re.findall(r"(?<![A-Z0-9#@$&_\-.])" + re.escape(name)
+                          + r"(?![A-Z0-9#@$&_\-])", code))
 
 
 def _unused_level1_vars(objs):

@@ -277,6 +277,93 @@ class WholeStructureOperationFixtures(unittest.TestCase):
         self.assertEqual(rows["SURNAME"]["group_resets"], 0)
 
 
+ARITH_SVC_SRC = """\
+    DEFINE DATA
+    PARAMETER USING FIX-PDA
+    LOCAL USING FIX-LDA
+    END-DEFINE
+    COMPUTE P-CUSTOMER-DATA.PERSON-ID = VAL(#WORK)
+    SUBTRACT 1 FROM P-CUSTOMER-DATA.WEEK-COUNT-IN
+    ADD 1 TO P-CUSTOMER-DATA.WEEK-COUNT-IN GIVING P-CUSTOMER-DATA.TIMESTAMP
+    EXAMINE P-CUSTOMER-DATA.SURNAME FOR '-' DELETE
+    COMPRESS P-CUSTOMER-DATA.SURNAME INTO P-CUSTOMER-DATA.P_NOTE LEAVING NO
+    FOR P-CUSTOMER-DATA.FIRST-NAME-1 1 TO P-CUSTOMER-DATA.P-NOTE
+    END-FOR
+    END
+"""
+
+
+class AssignmentTargetFixtures(unittest.TestCase):
+    """Every Natural statement form that writes an operand must be seen as an
+    assignment of that operand and nothing else on the line."""
+
+    def _targets(self, line):
+        return [line[a:b].split() for a, b in ad._target_spans(line)]
+
+    def test_compute_and_assign(self):
+        self.assertEqual(self._targets("COMPUTE NCCONTRACT.DATE-BOOKING = VAL(LOCAL-DATE)"),
+                         [["NCCONTRACT.DATE-BOOKING"]])
+        self.assertEqual(self._targets("  ASSIGN ROUNDED #A #B = #C * 2"), [["#A", "#B"]])
+        line = "COMPUTE ID-CUSTOMER-IN-N = VAL(P-CONTRACT-DATA.ID-CUSTOMER-IN)"
+        _, s, e = next(ad._occurrences(line, "ID-CUSTOMER-IN-N"))
+        self.assertTrue(ad._is_assignment(line, s, e))
+        _, s, e = next(ad._occurrences(line, "ID-CUSTOMER-IN"))
+        self.assertFalse(ad._is_assignment(line, s, e))
+
+    def test_arithmetic_forms(self):
+        self.assertEqual(self._targets("SUBTRACT 1 FROM #A"), [["#A"]])
+        self.assertEqual(self._targets("SUBTRACT #X FROM #A GIVING #B"), [["#B"]])
+        self.assertEqual(self._targets("MULTIPLY ROUNDED #A BY 2"), [["#A"]])
+        self.assertEqual(self._targets("DIVIDE 3 INTO #A GIVING #Q REMAINDER #R"),
+                         [["#Q"], ["#R"]])
+        self.assertEqual(self._targets("ADD 1 TO C-RECCNT"), [["C-RECCNT"]])
+        self.assertEqual(self._targets("EXAMINE #T FOR 'x' GIVING NUMBER #N"), [["#N"]])
+
+    def test_examine_input_workfile_and_for(self):
+        self.assertEqual(self._targets("EXAMINE TEMP_BIRTHDAY FOR '-' DELETE"),
+                         [["TEMP_BIRTHDAY"]])
+        self.assertEqual(self._targets("EXAMINE #T FOR '-' GIVING POSITION #P"), [["#P"]])
+        self.assertEqual(self._targets("IF #T = 'a' THEN EXAMINE #T FOR 'a' DELETE END-IF"), [])
+        self.assertEqual(self._targets("INPUT 'isn to delete' DELNAME"),
+                         [["'isn", "to", "delete'", "DELNAME"]])
+        self.assertEqual(self._targets("READ WORK FILE 1 ONCE RECORD V-REC"), [["V-REC"]])
+        self.assertEqual(self._targets("FOR V-CROCC 1 TO *OCCURRENCE(P-CRUISE-DATA.CRUISE-ID)"),
+                         [["V-CROCC"]])
+        self.assertEqual(self._targets("FOR #I = 1 TO #MAX"), [["#I"]])
+
+    def test_trailing_clauses_and_underscored_names(self):
+        self.assertEqual(self._targets("COMPRESS 'nat:' #BLOBID INTO MAKEURL LEAVING NO"),
+                         [["MAKEURL"]])
+        self.assertEqual(self._targets("IF P-LANGUAGE LT 10 COMPRESS '0' P-LANGUAGE TO V-LANGV LEAVING NO END-IF"),
+                         [["V-LANGV"]])
+        self.assertEqual(self._targets("SEPARATE #A INTO #B #C WITH DELIMITER ','"),
+                         [["#B", "#C"]])
+        self.assertEqual(self._targets("MOVE EDITED START-DATE-ALPHA  TO DATE_START (EM=YYYYMMDD)"),
+                         [["DATE_START", "(EM=YYYYMMDD)"]])
+        self.assertEqual(self._targets("READ NCCRUISE BY START-DATE FROM #FROM"), [])
+        self.assertEqual(self._targets("CALLNAT 'CAMSG-N' MSG-GROUP-PARA"), [])
+        self.assertEqual(list(ad._data_fields("DEFINE DATA LOCAL\n1 TEMP_BIRTHDAY (A10)\nEND-DEFINE")),
+                         [(1, "TEMP_BIRTHDAY", False)])
+
+    def test_pda_population_counts_arithmetic_targets(self):
+        objs = {
+            "FIX-PDA": _obj("FIX-PDA", "parameter data area", PDA_SRC),
+            "FIX-LDA": _obj("FIX-LDA", "local data area", LDA_SRC),
+            "FIX-SVC": _obj("FIX-SVC", "subprogram", ARITH_SVC_SRC),
+        }
+        refs, _ = ad._references(objs)
+        rows = {r["field"]: r for r in ad._pda_field_population(objs, refs)}
+        self.assertEqual((rows["PERSON-ID"]["assignments"], rows["PERSON-ID"]["reads"]), (1, 0))
+        # SUBTRACT ... FROM writes; ADD ... GIVING leaves the operand unchanged
+        self.assertEqual((rows["WEEK-COUNT-IN"]["assignments"], rows["WEEK-COUNT-IN"]["reads"]), (1, 1))
+        self.assertEqual((rows["TIMESTAMP"]["assignments"], rows["TIMESTAMP"]["reads"]), (1, 0))
+        # EXAMINE ... DELETE writes; the COMPRESS then reads it
+        self.assertEqual((rows["SURNAME"]["assignments"], rows["SURNAME"]["reads"]), (1, 1))
+        self.assertEqual((rows["FIRST-NAME-1"]["assignments"], rows["FIRST-NAME-1"]["reads"]), (1, 0))
+        # P_NOTE (underscore) is a different field from P-NOTE
+        self.assertEqual((rows["P-NOTE"]["assignments"], rows["P-NOTE"]["reads"]), (0, 1))
+
+
 class ReferenceAndMarkerFixtures(unittest.TestCase):
     def test_dynamic_call_reported_separately(self):
         objs = {"DYN": _obj("DYN", "program", """\
