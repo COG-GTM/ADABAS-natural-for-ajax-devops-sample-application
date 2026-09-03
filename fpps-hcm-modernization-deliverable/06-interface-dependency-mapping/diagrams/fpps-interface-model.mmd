@@ -2,7 +2,7 @@ flowchart TB
   subgraph sample["Verified in this repository (Demonstrated)"]
     direction LR
     P["rdcruisx.xml<br/>27 events"] --> A["RDCRUISP"]
-    A -->|"10 CALLNAT · 6 USING"| S["CRUISE16 services"]
+    A -->|"CALLNAT · USING"| S["CRUISE16 services"]
     S --> DB[("ADABAS DB 12<br/>FNR 41–44")]
     W["work file 1<br/>CruiseDescriptions.txt · .jpg"] --> A
     A -->|"nat: content objects"| B["browser"]

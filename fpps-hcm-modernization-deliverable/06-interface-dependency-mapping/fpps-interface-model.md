@@ -15,7 +15,7 @@ Public context used: the Interior Business Center describes itself as a shared s
 | Category | Verified in this repository (Demonstrated) | FPPS analogy / requires agency inputs (Roadmap) |
 |---|---|---|
 | **Online entry point** | One page contract: `rdcruisx.xml` declares 27 events, all handled in `RDCRUISP` (`dependency-map.md` → "NJX event contract"); session started by `STACK=(LOGON RDCRUISE;RDCRUISP)` (`SunnyIslands/deploy/wardeployDev.xml:58`) | Web FPPS screens and their Natural transaction programs; the list comes from Natural Security / menu definitions and the web tier's session configuration. **Input:** Natural Security export, web application configuration |
-| **Service contract between libraries** | 16 cross-library edges `RDCRUISE → CRUISE16` (6 PDAs/LDA via `USING`, 10 `CALLNAT`), all listed with lines in `dependency-map.md` → "Cross-library edges"; parameter shapes in `NCCOMM-P.NSA:9-16`, `NCCUGE-P.NSA:11-29`, `NCCRUL-P.NSA:10-30`, `NCCONW-P.NSA:10-18` | Same pattern across 100k+ modules: which library calls which, through which PDAs. **Input:** Predict/XRef "objects referenced" data (the Predict *Verify Application Integrity* functions enumerate referenced-but-not-implemented and implemented-but-not-referenced objects: https://documentation.softwareag.com/natural/prd852/webhelp/prd-webhelp/reference/natxref_verify_9.htm, opened in this authoring session) |
+| **Service contract between libraries** | every cross-library edge `RDCRUISE → CRUISE16` (`USING` of the shared PDAs/LDA and `CALLNAT` of the services), listed with source lines in `dependency-map.md` → "Cross-library edges"; parameter shapes in `NCCOMM-P.NSA:9-16`, `NCCUGE-P.NSA:11-29`, `NCCRUL-P.NSA:10-30`, `NCCONW-P.NSA:10-18` | Same pattern across 100k+ modules: which library calls which, through which PDAs. **Input:** Predict/XRef "objects referenced" data (the Predict *Verify Application Integrity* functions enumerate referenced-but-not-implemented and implemented-but-not-referenced objects: https://documentation.softwareag.com/natural/prd852/webhelp/prd-webhelp/reference/natxref_verify_9.htm, opened in this authoring session) |
 | **Database** | 4 ADABAS files on DB 12 (FNR 41–44), 3 writers, all verbs per object in `../01-discoverability-comprehension-baseline/module-inventory.md` → "ADABAS files" | Personnel-payroll master files, history files, tables. **Input:** Predict file/DDM export, ADABAS FDTs, file-usage cross-reference |
 | **Inbound files (work files)** | `RDREADWN` reads a language-tagged text file as work file 1 (`RDREADWN.NSN:35-36`); `IMG-LOAD` reads `.jpg` files as unformatted work file 1 (`IMG-LOAD.NSN:23-26`). Both paths are hard-coded, one of them a Windows developer path | Agency → FPPS feeds: time and attendance, personnel actions, benefits elections, address and banking changes, arriving as datasets read by Natural batch programs under JCL. **Input:** JCL `DD` statements for `CMWKF01`–`CMWKF32`, record layouts, sending-system list per agency |
 | **Outbound content / files** | `MAKEURL` emits binary content objects to the browser as `nat:` URLs (`MAKEURL.NSN:40-46`); no `WRITE WORK` on any executable line (the only ones are commented out in `ERRLOG-I.NSC:11-21`) | FPPS → agency and FPPS → Treasury/OPM/benefit-carrier outputs: pay files, leave and earnings statements, W-2, retirement and EHRI submissions. **Input:** JCL output `DD`s, transmission job definitions, recipient list |
@@ -34,7 +34,7 @@ flowchart TB
   subgraph sample["Verified in this repository (Demonstrated)"]
     direction LR
     P["rdcruisx.xml<br/>27 events"] --> A["RDCRUISP"]
-    A -->|"10 CALLNAT · 6 USING"| S["CRUISE16 services"]
+    A -->|"CALLNAT · USING"| S["CRUISE16 services"]
     S --> DB[("ADABAS DB 12<br/>FNR 41–44")]
     W["work file 1<br/>CruiseDescriptions.txt · .jpg"] --> A
     A -->|"nat: content objects"| B["browser"]
@@ -60,12 +60,12 @@ flowchart TB
 
 | Capability | Runs here today on | At FPPS scale needs |
 |---|---|---|
-| Static edge extraction: `CALLNAT`, `FETCH`, `INCLUDE`, `USING` with source lines (`tools/analyze_disposition.py` → `references`) | 15 code objects, 62 edges | the Natural source export (or Predict XRef data as an alternative source of the same edges) |
-| Reachability from a root (`UI_ROOT = "RDCRUISP"`, `tools/analyze_disposition.py:54`) | 1 root, from the web-tier `STACK=` | one root per online transaction **and** one per JCL step `PGM=`/`CMSYNIN` stack — the JCL supplies the batch roots |
+| Static edge extraction: `CALLNAT`, `FETCH`, `INCLUDE`, `USING` with source lines (`tools/analyze_disposition.py` → `references`) | the 15 code objects and every static edge in `dependency-map.md` | the Natural source export (or Predict XRef data as an alternative source of the same edges) |
+| Reachability from a root (`UI_ROOT = "RDCRUISP"`, `tools/analyze_disposition.py:54`) | one root, from the web-tier `STACK=` | one root per online transaction **and** one per JCL step `PGM=`/`CMSYNIN` stack — the JCL supplies the batch roots |
 | Dynamic-invocation count (`CALLNAT #VAR`) | 0 in the sample | the same count is the ceiling on how much of the estate static analysis can resolve; Predict's guidance to avoid dynamic invocation applies |
-| Page-event contract: declared vs handled events | 27 / 27, no unhandled | screen-map or Natural map definitions per transaction |
-| External touch-point scan: `DEFINE WORK FILE`, `READ/WRITE WORK`, `XCIOBJECTS` (`generate_dependency_map.py`) | 8 work-file statements in 2 objects, 11 content-object statements in 3 objects | the same scan plus the JCL `DD` names that bind `CMWKFnn` to datasets — the code side is Demonstrated, the dataset side is Roadmap |
-| Environment diff (`natdeployDev/Test/Prod.xml`) | 5 differing properties | NATPARM and Control-M definitions per environment |
+| Page-event contract: declared vs handled events | every declared event in `rdcruisx.xml` (no unhandled events; see `dependency-map.md`) | screen-map or Natural map definitions per transaction |
+| External touch-point scan: `DEFINE WORK FILE`, `READ/WRITE WORK`, `XCIOBJECTS` (`generate_dependency_map.py`) | the work-file statements in `RDREADWN` / `IMG-LOAD` and content-object statements in `MAKEURL` / `IMG-LOAD` / `RDCRUISP` tabulated in `dependency-map.md` | the same scan plus the JCL `DD` names that bind `CMWKFnn` to datasets — the code side is Demonstrated, the dataset side is Roadmap |
+| Environment diff (`natdeployDev/Test/Prod.xml`) | the five differing properties per environment (`deployment-config.md`) | NATPARM and Control-M definitions per environment |
 
 ## 4. Interface inventory the SI should produce (Roadmap)
 
