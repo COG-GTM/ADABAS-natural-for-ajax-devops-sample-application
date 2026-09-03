@@ -1,0 +1,6 @@
+flowchart LR
+  G["Git workspace<br/>SunnyIslands/ (Demonstrated)"]
+  G --> J1["Jenkins job NJX-CI-Dev<br/>natdeployDev + wardeployDev<br/>parm=NDVDEV · user CI-DEV · delete=NO · context SunnyIslands-Dev"]
+  G --> J2["Jenkins job NJX-CI-Test<br/>natdeployTest + wardeployTest<br/>parm=NDVTEST · user CI-TEST · delete=NO · context SunnyIslands-Test"]
+  G --> J3["Jenkins job NJX-CI-Prod<br/>natdeployProd + wardeployProd<br/>parm=NDVPROD · user CI-PROD · delete=YES · context SunnyIslands-Prod"]
+  J1 -->|promote same commit| J2 -->|promote same commit| J3
