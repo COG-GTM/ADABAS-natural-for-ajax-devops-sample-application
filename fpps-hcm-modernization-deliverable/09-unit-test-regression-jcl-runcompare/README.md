@@ -6,7 +6,7 @@ Unit tests derived from extracted rules, a regression suite gated in CI, a gener
 |---|---|
 | **Capability** | Unit-test, regression, and JCL run-compare generation |
 | **Why it matters to an SI implementing an HCM** | Regression coverage protects the pay run during and after cut-over and is the fastest way to demonstrate that a rule extracted in 02 still holds after HCM configuration. |
-| **Builds on** | `../../tests/` (72 tests), `../../.github/workflows/regression-tests.yml`, `../../.github/workflows/codeql-analysis.yml`, `../../docs/testing-and-ci.md`, `../08-equivalence-testing-reconciliation/harness/` |
+| **Builds on** | `../../tests/` (106 tests), `../../.github/workflows/regression-tests.yml`, `../../.github/workflows/codeql-analysis.yml`, `../../docs/testing-and-ci.md`, `../08-equivalence-testing-reconciliation/harness/` |
 | **Maturity** | Demonstrated for unit/regression on the sample (the suite, CI workflow and generated map run here today); JCL run-compare is designed, and its Control-M/JCL inventory data is roadmap (no FPPS JCL in this repository) |
 
 ## Contents
@@ -26,7 +26,7 @@ Unit tests derived from extracted rules, a regression suite gated in CI, a gener
 flowchart LR
     T["push / pull_request<br/>to master"] --> W["regression-tests.yml<br/>ubuntu-latest · Python 3.12"]
     W --> S1["Step 1<br/>python3 -m compileall -q tests tools"]
-    S1 --> S2["Step 2<br/>python3 -m unittest discover -s tests -v<br/>72 tests: 39 behavioural · 22 source-conformance · 11 evidence-drift"]
+    S1 --> S2["Step 2<br/>python3 -m unittest discover -s tests -v<br/>106 tests: 39 behavioural · 22 source-conformance · 43 evidence-drift · 2 package-integrity"]
     S2 --> S3["Step 3<br/>generate_data_dictionary.py<br/>git diff --exit-code docs/data-dictionary.md"]
     S3 --> OK["Green: merge to master"]
     S1 -.->|"syntax error"| F["Red: blocked"]

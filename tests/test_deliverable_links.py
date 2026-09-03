@@ -6,7 +6,9 @@ image links ``![alt](path)``, and back-ticked paths that start with ``../``,
 ``./``, ``docs/``, ``tests/``, ``tools/``, ``SunnyIslands/`` or
 ``fpps-hcm-modernization-deliverable/`` (glob characters are allowed and must
 match at least one file; a trailing ``:12-40`` line citation is ignored).
-External URLs, bare anchors and ``...`` placeholders are skipped.
+A dotted Python reference such as ``tests/harness/fixtures.make_db()``
+resolves when ``tests/harness/fixtures.py`` exists.  External URLs, bare
+anchors and ``...`` placeholders are skipped.
 """
 
 import glob
@@ -58,9 +60,15 @@ def _resolves(md_file, target):
     if not path:
         return True
     candidate = (base / path)
-    if candidate.exists():
+    if candidate.exists() or glob.glob(str(candidate)):
         return True
-    return bool(glob.glob(str(candidate)))
+    # ``pkg/module.attr(...)`` / ``pkg/module.attr['k']`` -> pkg/module.py
+    module = re.split(r"[(\[]", path, 1)[0]
+    while "." in module.rsplit("/", 1)[-1]:
+        module = module.rsplit(".", 1)[0]
+        if (base / f"{module}.py").is_file():
+            return True
+    return False
 
 
 class DeliverableLinks(unittest.TestCase):

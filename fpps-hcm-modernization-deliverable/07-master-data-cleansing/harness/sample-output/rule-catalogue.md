@@ -1,6 +1,6 @@
 # Rule catalogue (generated)
 
-Generated from `RULES` in `harness/cleanse_reconcile.py`; do not edit by hand. `../cleansing-rules.md` explains each rule; `--check` fails if the two disagree on rule IDs.
+Generated from `RULES` in `harness/cleanse_reconcile.py`; do not edit by hand. `../../cleansing-rules.md` explains each rule; `--check` fails if the two disagree on rule IDs.
 
 | Rule | Name | File | Dictionary field(s) | Category | Default action | Payroll analog (designed) | Candidate HCM target (designed) | Source evidence |
 |---|---|---|---|---|---|---|---|---|

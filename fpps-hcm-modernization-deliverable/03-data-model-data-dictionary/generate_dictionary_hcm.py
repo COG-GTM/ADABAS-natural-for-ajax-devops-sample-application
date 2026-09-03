@@ -234,7 +234,7 @@ ANNOTATIONS = {
         f"Joined by `FIND NCYACHT ... YACHT-ID = NCCRUISE.ID-YACHT` (`{_C}CRLIST-N.NSN:80`) and via the `YACHT-PICTURE` view (`{_C}CRGET-N.NSN:101`)."),
     ("NCCRUISE", "PRICES"): (
         "Element", "(group header) rates",
-        "Group header only; name collides with a Natural keyword-like token so the analyzer marks it ambiguous.",
+        "Group header only; carries no data and is never referenced by executable code.",
         "Structural DDM group; no data."),
     ("NCCRUISE", "PRICE-1W"): (
         "Element / rate definition", "Rate amount (one period)",
@@ -260,8 +260,8 @@ ANNOTATIONS = {
         "Unreferenced in analyzed scope; disposition first.", "Declared in the DDM and PDAs only."),
     ("NCYACHT", "LENGTH"): (
         "(none)", "Physical attribute",
-        "No HCM analog. The analyzer's `MAKEURL` hit is a keyword collision (`LENGTH`), not a field reference.",
-        "Declared in the DDM and PDAs; name is on the analyzer stoplist."),
+        "No HCM analog; unreferenced in analyzed scope (the analyzer resolves `LENGTH` in `MAKEURL` to that object's own variable, not to this DDM field).",
+        "Declared in the DDM and PDAs only."),
     ("NCYACHT", "WIDTH"): ("(none)", "Physical attribute", "No HCM analog; unreferenced in analyzed scope.", "Declared in the DDM and PDAs only."),
     ("NCYACHT", "DRAFT"): ("(none)", "Physical attribute", "No HCM analog; unreferenced in analyzed scope.", "Declared in the DDM and PDAs only."),
     ("NCYACHT", "SAIL-SURFACE"): ("(none)", "Physical attribute", "No HCM analog; unreferenced in analyzed scope.", "Declared in the DDM and PDAs only."),
@@ -304,9 +304,10 @@ def _fmt(f):
 def _referenced(u):
     if u is None:
         return "not analyzed"
-    if u["ambiguous"]:
+    if u["ambiguous_in"]:
         hits = ", ".join(f"`{o}`" for o in u["referenced_by"]) or "none"
-        return f"ambiguous (keyword collision); name hits: {hits}"
+        amb = ", ".join(f"`{o}`" for o in u["ambiguous_in"])
+        return f"ambiguous unqualified reference in {amb}; unambiguous hits: {hits}"
     if u["referenced_by"]:
         return "yes: " + ", ".join(f"`{o}`" for o in u["referenced_by"])
     return "no - unreferenced in analyzed scope"
@@ -352,7 +353,7 @@ def build():
         "|---|---|---|",
         "| Fmt/len | Natural format and length from the DDM (`A` alpha, `N` numeric, `P` packed, `B` binary, `U` Unicode, `I` integer) | Demonstrated |",
         "| Desc | `D` when the field is an ADABAS descriptor (searchable/orderable key) | Demonstrated |",
-        "| Referenced by executable code | Natural objects in the analyzed libraries that name the field; static, name-based, heuristic; 'ambiguous' when the name collides with a Natural keyword | Demonstrated (evidence class: static reference) |",
+        "| Referenced by executable code | Natural objects whose executable code references the field through a view of this DDM (the analyzer resolves each operand to the structure that owns it); 'ambiguous' when an unqualified name matches more than one structure in the same object | Demonstrated (evidence class: static reference) |",
         "| Lineage notes | Where the value is written and read, with `path:lines` opened while authoring | Demonstrated (source citations) |",
         "| Candidate HCM object / attribute | HCM Data Loader business object and attribute the field would feed; to be confirmed against the target release | Designed |",
         "| Mapping notes | Conversion, crosswalk or exclusion guidance | Designed |",
@@ -366,10 +367,10 @@ def build():
     for name in FILE_ORDER:
         d = ddms[name]
         fields = d.fields
-        refd = sum(1 for f in fields if usage[(name, f.name)]["referenced_by"] and not usage[(name, f.name)]["ambiguous"])
+        refd = sum(1 for f in fields if usage[(name, f.name)]["referenced_by"] and not usage[(name, f.name)]["ambiguous_in"])
         unref = sum(1 for f in fields if usage[(name, f.name)]["kind"] == "field"
-                    and not usage[(name, f.name)]["referenced_by"] and not usage[(name, f.name)]["ambiguous"])
-        amb = sum(1 for f in fields if usage[(name, f.name)]["ambiguous"])
+                    and not usage[(name, f.name)]["referenced_by"] and not usage[(name, f.name)]["ambiguous_in"])
+        amb = sum(1 for f in fields if usage[(name, f.name)]["ambiguous_in"])
         with_rules = sum(1 for f in fields if _rules_for(rules, name, f.name))
         role, analog, hdl = FILE_ROLE[name]
         lines.append(f"| `{name}` | {d.db}/{d.fnr} | {len(fields)} | "

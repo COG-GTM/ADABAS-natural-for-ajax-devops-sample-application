@@ -6,7 +6,7 @@ Profiling, rule-based cleansing and reconciliation of person and transaction mas
 |---|---|
 | **Capability** | Master-data cleansing and reconciliation |
 | **Why it matters to an SI implementing an HCM** | HCM Data Loader rejects orphaned foreign keys, invalid domains and duplicate source keys; finding them in the source first, with counts that reconcile, is what turns a load attempt into a load plan. |
-| **Builds on** | `../tests/harness/adabas_sim.py`, `../tests/harness/fixtures.py`, `../03-data-model-data-dictionary/data-dictionary-hcm.md` (rule keys), `../docs/data-dictionary.md` |
+| **Builds on** | `../../tests/harness/adabas_sim.py`, `../../tests/harness/fixtures.py`, `../03-data-model-data-dictionary/data-dictionary-hcm.md` (rule keys), `../../docs/data-dictionary.md` |
 | **Maturity** | Demonstrated on synthetic data (profile → rule → cleanse → reconcile runs here today and is drift-tested); payroll-specific relationship and effective-dating rules are (designed) |
 
 ## Contents

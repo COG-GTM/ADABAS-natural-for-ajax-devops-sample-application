@@ -26,7 +26,7 @@ Master-data model and field-level dictionary derived from the four ADABAS DDMs, 
 | Which of two look-alike columns is the survivor? | "Lineage notes" column with `path:lines` | `FIRST-NAME-OLD` is persisted (`CUNEW-N.NSN:48`, `CUMOD-N.NSN:53`); `FIRST-NAME-1` is adapter-only and commented out of the DB view (`NCDATA-L.NSL:56`) |
 | Which field is the source key and which is just an index? | `data-model.md` "Keys and descriptors"; `Desc` column | `SURNAME`, `COUNTRY`, `ZIP-CODE`, `CITY`, `SEX` are descriptors but not keys; the ISN is neither |
 | What breaks the load? | "Cleansing rules" column, resolved in `../07-master-data-cleansing/cleansing-rules.md` | `CRUISE-STATUS` is an A1 holding a digit (CR-04); `EMAIL` is an MU where only occurrence 1 has code meaning (CR-06) |
-| Can the analyzer be wrong? | "ambiguous" marker and lineage note | `LENGTH` in `NCYACHT` and the `NAME` / `ADDRESS` / `PRICES` group headers collide with Natural keywords; `FIRST-NAME-1`'s `RDCRUISP` hit is a PDA-field name match |
+| Can the analyzer be wrong? | "ambiguous" marker and lineage note | The analyzer resolves each operand to the structure that owns it, so `LENGTH` in `MAKEURL` and `FIRST-NAME-1` in `RDCRUISP` (a PDA field) are not counted as DDM references; an unqualified name that matches two structures in one object is reported as ambiguous rather than counted |
 
 ## Reproduce
 

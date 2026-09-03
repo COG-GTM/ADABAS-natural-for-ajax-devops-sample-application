@@ -96,14 +96,14 @@ Every emitted code, the services that emit it, and the test modules whose lines 
 | 9800 | `CONEW-N` | `tests/test_concurrency.py` (8), `tests/test_conew_booking.py` (3), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (4) |
 | 9807 | `CRLIST-N` | `tests/test_crlist_listing.py` (2), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (3) |
 | 9857 | `CRLIST-N` | `tests/test_crlist_listing.py` (3), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (2) |
-| 9902 | `CONEW-N` | `tests/test_concurrency.py` (4), `tests/test_conew_booking.py` (11), `tests/test_source_conformance.py` (7) | `tests/harness/natural_model.py` (3) |
+| 9902 | `CONEW-N` | `tests/test_concurrency.py` (4), `tests/test_conew_booking.py` (11), `tests/test_disposition_analysis.py` (1), `tests/test_source_conformance.py` (7) | `tests/harness/natural_model.py` (3) |
 | 9904 | `CONEW-N` | `tests/test_conew_booking.py` (6), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (3) |
 | 9905 | `CONEW-N` | `tests/test_conew_booking.py` (5), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (3) |
 | 9918 | `CONEW-N` | `tests/test_conew_booking.py` (5), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (3) |
 | 9923 | `CUGET-N` | none (harness needed) | none |
 | 9924 | `CUGET-N`, `CUMOD-N` | none (harness needed) | none |
 | 9934 | `CRGET-N`, `CUMOD-N` | none (harness needed) | none |
-| 9999 | `CONEW-N`, `CRLIST-N`, `CUGET-N`, `CUMOD-N`, `CUNEW-N` | `tests/test_source_conformance.py` (2) | none |
+| 9999 | `CONEW-N`, `CRLIST-N`, `CUGET-N`, `CUMOD-N`, `CUNEW-N` | `tests/test_disposition_analysis.py` (1), `tests/test_source_conformance.py` (2) | none |
 <!-- /generated:code-test-coverage -->
 
 ## Coverage summary (generated from the tables above)

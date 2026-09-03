@@ -25,7 +25,7 @@ A narrated walk-through of the two Natural libraries in the Sunny Islands Cruise
 | Static references (CALLNAT / FETCH / INCLUDE / USING) | 62 |
 | Dynamic invocations (unresolvable statically) | 0 |
 | Source lines, all objects | 3005 |
-| Executable lines, programs and subprograms | 1519 |
+| Executable lines, programs and subprograms | 1329 |
 | Page events declared in `rdcruisx.xml` | 27 |
 | Objects unreferenced in analyzed scope | `CA3900-N`, `CONTPDA`, `IMG-LOAD`, `MYPDA`, `NCCUSL-P`, `SYPDA`, `YACHTPDA` |
 | Stand-alone programs with no UI path | `DELETECU` |

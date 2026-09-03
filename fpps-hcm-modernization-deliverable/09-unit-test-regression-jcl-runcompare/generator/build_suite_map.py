@@ -216,6 +216,19 @@ RULES = [
      "fpps-hcm-modernization-deliverable/10-migration-disposition-dead-code/"
      "evidence/",
      lambda ev: _has(ev, "committed_json", "committed_markdown")),
+    # --- deliverable package integrity ------------------------------------
+    ("PKG-LINKS", "package integrity",
+     "Every relative link, image and back-ticked repository path in the "
+     "deliverable resolves to a file in the checkout",
+     "fpps-hcm-modernization-deliverable/",
+     lambda ev: _file(ev, "test_deliverable_links.py")
+     and _has(ev, "relative_reference_resolves")),
+    ("PKG-STRUCTURE", "package integrity",
+     "The package has the hub README and capability directories 00-10, "
+     "each with a README",
+     "fpps-hcm-modernization-deliverable/README.md",
+     lambda ev: _file(ev, "test_deliverable_links.py")
+     and _has(ev, "hub_and_all_capability_directories")),
 ]
 
 RULE_INDEX = {r[0]: r for r in RULES}
@@ -230,6 +243,8 @@ REQUIREMENTS = {
     "workflow": "Inquiry/listing behaviour reproduced",
     "data model": "Personnel-payroll data model mapped field-by-field",
     "disposition evidence": "Extraction evidence reproducible and reviewed",
+    "package integrity": "Every deliverable cross-reference the SI follows "
+                         "resolves; the package structure is complete",
 }
 
 FILE_CLASS = {
@@ -243,6 +258,8 @@ FILE_CLASS = {
                                    "tests/harness/source_parser.py over .NSN/.NSD"),
     "test_disposition_analysis.py": ("Evidence drift",
                                      "tools/analyze_disposition.py"),
+    "test_deliverable_links.py": ("Package integrity",
+                                  "fpps-hcm-modernization-deliverable/**/*.md"),
 }
 
 
@@ -576,6 +593,35 @@ def build():
                   workflow_steps())
 
 
+PROSE_DOCS = ("README.md", "test-generation-approach.md")
+_COUNT_RE = re.compile(r"(?<![\w-])(?!0\d)(\d+) (tests|rules)\b")  # skips `02 rules`
+
+
+def prose_count_errors(inventory):
+    """Hand-written ``N tests`` / ``N rules`` figures in the authored 09
+    documents must equal the suite total, one per-class subtotal, or the
+    rule-catalogue size."""
+    by_class = {}
+    for t in inventory:
+        by_class[t["file"]] = by_class.get(t["file"], 0) + 1
+    class_totals = {}
+    for f, n in by_class.items():
+        cls = FILE_CLASS[f][0].split(" (")[0]
+        class_totals[cls] = class_totals.get(cls, 0) + n
+    ok_tests = {len(inventory), *class_totals.values()}
+    errors = []
+    for name in PROSE_DOCS:
+        text = (OUT_PATH.parent / name).read_text(encoding="utf-8")
+        for m in _COUNT_RE.finditer(text):
+            n, what = int(m.group(1)), m.group(2)
+            if (what == "tests" and n not in ok_tests) or \
+                    (what == "rules" and n != len(RULES)):
+                errors.append(f"{name}: '{m.group(0)}' does not match tests/ "
+                              f"(total {len(inventory)}, by class "
+                              f"{class_totals}, rules {len(RULES)})")
+    return errors
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--check", action="store_true",
@@ -585,6 +631,10 @@ def main(argv=None):
                     help="print the map instead of writing it")
     args = ap.parse_args(argv)
     text = build() + "\n"
+    prose = prose_count_errors(parse_tests())
+    if prose:
+        sys.stderr.write("\n".join(prose) + "\n")
+        return 1
     if args.stdout:
         sys.stdout.write(text)
         return 0

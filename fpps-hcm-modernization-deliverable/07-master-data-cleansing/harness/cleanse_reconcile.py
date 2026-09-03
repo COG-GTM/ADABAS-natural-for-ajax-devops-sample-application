@@ -25,7 +25,7 @@ What it does
    a content hash of the loadable set, and the exception list.
 5. Writes ``sample-output/`` (Markdown report, JSON report, exceptions CSV,
    profile). ``--check`` regenerates in memory and exits non-zero when the
-   committed output differs or when the rule IDs in ``../cleansing-rules.md``
+   committed output differs or when the rule IDs in ``../../cleansing-rules.md``
    do not match ``RULES`` exactly.
 
 Run from the repository root::
@@ -944,7 +944,7 @@ def render_exceptions_csv(exceptions):
 def render_rule_catalogue_md():
     lines = ["# Rule catalogue (generated)", "",
              "Generated from `RULES` in `harness/cleanse_reconcile.py`; do not edit by hand. "
-             "`../cleansing-rules.md` explains each rule; `--check` fails if the two disagree on rule IDs.", "",
+             "`../../cleansing-rules.md` explains each rule; `--check` fails if the two disagree on rule IDs.", "",
              _md_table(["Rule", "Name", "File", "Dictionary field(s)", "Category", "Default action",
                         "Payroll analog (designed)", "Candidate HCM target (designed)", "Source evidence"],
                        [[r.id, r.name, r.file, ", ".join(f"`{n}`" for _, n in r.fields), r.category,

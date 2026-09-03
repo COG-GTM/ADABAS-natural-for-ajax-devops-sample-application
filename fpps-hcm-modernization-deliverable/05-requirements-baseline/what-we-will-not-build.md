@@ -74,7 +74,7 @@ Explicit exclusions from the requirements baseline, each with the evidence class
 | `NCCONW-P.WEEK-COUNT-IN` | 0 | 0 | declared but never assigned |
 | `NCCONW-P.DATE-RESERVATION-IN` | 0 | 0 | declared but never assigned |
 | `NCCONW-P.DATE-BOOKING-IN` | 0 | 0 | declared but never assigned |
-| `NCCRUL-P.P-DESTHARBOR` | 1 | 1 | declared but never assigned |
+| `NCCRUL-P.P-DESTHARBOR` | 2 | 2 | declared but never assigned |
 <!-- /generated:never-assigned-pda-fields -->
 
 ### E-05 — Twenty catalogued message codes that no executable statement emits
