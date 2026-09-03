@@ -1,0 +1,1299 @@
+{
+  "scope": "SunnyIslands/Natural-Libraries + rdcruisx.xml (static analysis of executable lines; findings are candidates)",
+  "adapter": {
+    "path": "SunnyIslands/Natural-Libraries/RDCRUISE/Programs/RDCRUISP.NSP",
+    "lines": 987,
+    "subroutines": {
+      "CUSTLOGOUT": {
+        "start": 442,
+        "end": 462,
+        "callnats": [],
+        "performs": []
+      },
+      "INIMENUTEXT": {
+        "start": 464,
+        "end": 487,
+        "callnats": [],
+        "performs": []
+      },
+      "CUSTLOGIN": {
+        "start": 489,
+        "end": 568,
+        "callnats": [
+          {
+            "target": "CUGET-N",
+            "line": 514
+          }
+        ],
+        "performs": [
+          "MAKE-ALLUNVISIBLE"
+        ]
+      },
+      "UPDATEBOOKING": {
+        "start": 572,
+        "end": 601,
+        "callnats": [
+          {
+            "target": "CONEW-N",
+            "line": 581
+          }
+        ],
+        "performs": []
+      },
+      "UPDATEMYDATA": {
+        "start": 604,
+        "end": 700,
+        "callnats": [
+          {
+            "target": "CUMOD-N",
+            "line": 626
+          },
+          {
+            "target": "CUNEW-N",
+            "line": 672
+          }
+        ],
+        "performs": [
+          "MAKE-ALLUNVISIBLE"
+        ]
+      },
+      "FILL-CRUISEDETAILS": {
+        "start": 703,
+        "end": 746,
+        "callnats": [
+          {
+            "target": "CRGET-N",
+            "line": 716
+          },
+          {
+            "target": "MAKEURL",
+            "line": 734
+          }
+        ],
+        "performs": []
+      },
+      "RESET-CRUISEDETAILS": {
+        "start": 748,
+        "end": 757,
+        "callnats": [],
+        "performs": []
+      },
+      "SHOWALL": {
+        "start": 760,
+        "end": 795,
+        "callnats": [
+          {
+            "target": "CRLIST-N",
+            "line": 765
+          }
+        ],
+        "performs": []
+      },
+      "MAKE-ALLUNVISIBLE": {
+        "start": 798,
+        "end": 820,
+        "callnats": [],
+        "performs": []
+      },
+      "INI-OFFERS": {
+        "start": 823,
+        "end": 949,
+        "callnats": [
+          {
+            "target": "CRGET-N",
+            "line": 827
+          },
+          {
+            "target": "MAKEURL",
+            "line": 844
+          },
+          {
+            "target": "CRGET-N",
+            "line": 857
+          },
+          {
+            "target": "MAKEURL",
+            "line": 874
+          },
+          {
+            "target": "CRGET-N",
+            "line": 887
+          },
+          {
+            "target": "MAKEURL",
+            "line": 904
+          },
+          {
+            "target": "CRGET-N",
+            "line": 917
+          },
+          {
+            "target": "MAKEURL",
+            "line": 934
+          }
+        ],
+        "performs": []
+      },
+      "GDA2PV": {
+        "start": 952,
+        "end": 982,
+        "callnats": [],
+        "performs": []
+      }
+    },
+    "commented_out_callnats": [
+      {
+        "line": 85,
+        "target": "IMG-LOAD",
+        "text": "* CALLNAT 'IMG-LOAD' #FILEIMGHOME PVTOPIMAGE XCIOBJECTS(*)"
+      },
+      {
+        "line": 86,
+        "target": "IMG-LOAD",
+        "text": "* CALLNAT 'IMG-LOAD' #FILEIMGALL PVSEARCHIMAGE XCIOBJECTS(*)"
+      },
+      {
+        "line": 88,
+        "target": "IMG-LOAD",
+        "text": "* CALLNAT 'IMG-LOAD' #FILEIMG1 PVIMAGEPAROS XCIOBJECTS(*)"
+      },
+      {
+        "line": 89,
+        "target": "IMG-LOAD",
+        "text": "* CALLNAT 'IMG-LOAD' #FILEIMG2 PVIMAGEAGHIOS XCIOBJECTS(*)"
+      },
+      {
+        "line": 90,
+        "target": "IMG-LOAD",
+        "text": "* CALLNAT 'IMG-LOAD' #FILEIMG3 PVIMAGELEFKAS XCIOBJECTS(*)"
+      },
+      {
+        "line": 91,
+        "target": "IMG-LOAD",
+        "text": "* CALLNAT 'IMG-LOAD' #FILEIMG4 PVIMAGESANTORINI XCIOBJECTS(*)"
+      }
+    ]
+  },
+  "ui_events": [
+    {
+      "event": "nat:page.end",
+      "adapter_line": 114,
+      "declared_in_ui": 0,
+      "raised_via_menu_line": null,
+      "performs": [],
+      "services": [],
+      "other_callnats": [],
+      "classification": "page refresh only"
+    },
+    {
+      "event": "onFacebook",
+      "adapter_line": 118,
+      "declared_in_ui": 0,
+      "raised_via_menu_line": null,
+      "performs": [],
+      "services": [],
+      "other_callnats": [],
+      "classification": "page refresh only"
+    },
+    {
+      "event": "onHome",
+      "adapter_line": 123,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": 73,
+      "performs": [
+        "MAKE-ALLUNVISIBLE"
+      ],
+      "services": [],
+      "other_callnats": [],
+      "classification": "UI state only (visibility / GDA moves)"
+    },
+    {
+      "event": "onQuestion",
+      "adapter_line": 131,
+      "declared_in_ui": 0,
+      "raised_via_menu_line": 77,
+      "performs": [
+        "MAKE-ALLUNVISIBLE"
+      ],
+      "services": [],
+      "other_callnats": [],
+      "classification": "UI state only (visibility / GDA moves)"
+    },
+    {
+      "event": "onLoginicon",
+      "adapter_line": 138,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [],
+      "services": [],
+      "other_callnats": [],
+      "classification": "UI state only (visibility / GDA moves)"
+    },
+    {
+      "event": "onNewdataicon",
+      "adapter_line": 148,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "CUSTLOGOUT",
+        "MAKE-ALLUNVISIBLE"
+      ],
+      "services": [],
+      "other_callnats": [],
+      "classification": "UI state only (visibility / GDA moves)"
+    },
+    {
+      "event": "onLoginbutton",
+      "adapter_line": 159,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "CUSTLOGIN"
+      ],
+      "services": [
+        "CUGET-N"
+      ],
+      "other_callnats": [],
+      "classification": "dispatches to business service"
+    },
+    {
+      "event": "onMydataSave",
+      "adapter_line": 165,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "UPDATEMYDATA"
+      ],
+      "services": [
+        "CUMOD-N",
+        "CUNEW-N"
+      ],
+      "other_callnats": [],
+      "classification": "dispatches to business service"
+    },
+    {
+      "event": "onBookingSave",
+      "adapter_line": 171,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "UPDATEBOOKING"
+      ],
+      "services": [
+        "CONEW-N"
+      ],
+      "other_callnats": [],
+      "classification": "dispatches to business service"
+    },
+    {
+      "event": "onLoginClose",
+      "adapter_line": 177,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "CUSTLOGOUT"
+      ],
+      "services": [],
+      "other_callnats": [],
+      "classification": "UI state only (visibility / GDA moves)"
+    },
+    {
+      "event": "onHotcruises",
+      "adapter_line": 189,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": 74,
+      "performs": [
+        "INI-OFFERS",
+        "MAKE-ALLUNVISIBLE"
+      ],
+      "services": [
+        "CRGET-N"
+      ],
+      "other_callnats": [
+        "MAKEURL"
+      ],
+      "classification": "dispatches to business service"
+    },
+    {
+      "event": "onFavorites",
+      "adapter_line": 197,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": 75,
+      "performs": [
+        "MAKE-ALLUNVISIBLE"
+      ],
+      "services": [],
+      "other_callnats": [],
+      "classification": "UI state only (visibility / GDA moves)"
+    },
+    {
+      "event": "onMydataClose",
+      "adapter_line": 204,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "MAKE-ALLUNVISIBLE"
+      ],
+      "services": [],
+      "other_callnats": [],
+      "classification": "UI state only (visibility / GDA moves)"
+    },
+    {
+      "event": "onBookingClose",
+      "adapter_line": 232,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "MAKE-ALLUNVISIBLE"
+      ],
+      "services": [],
+      "other_callnats": [],
+      "classification": "UI state only (visibility / GDA moves)"
+    },
+    {
+      "event": "onLogouticon",
+      "adapter_line": 240,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "CUSTLOGOUT",
+        "MAKE-ALLUNVISIBLE"
+      ],
+      "services": [],
+      "other_callnats": [],
+      "classification": "UI state only (visibility / GDA moves)"
+    },
+    {
+      "event": "onMydataicon",
+      "adapter_line": 253,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "MAKE-ALLUNVISIBLE"
+      ],
+      "services": [],
+      "other_callnats": [],
+      "classification": "UI state only (visibility / GDA moves)"
+    },
+    {
+      "event": "onCloseMydata",
+      "adapter_line": 261,
+      "declared_in_ui": 0,
+      "raised_via_menu_line": null,
+      "performs": [],
+      "services": [],
+      "other_callnats": [],
+      "classification": "ignored (IGNORE)"
+    },
+    {
+      "event": "onTwitter",
+      "adapter_line": 266,
+      "declared_in_ui": 0,
+      "raised_via_menu_line": null,
+      "performs": [],
+      "services": [],
+      "other_callnats": [],
+      "classification": "page refresh only"
+    },
+    {
+      "event": "onSetge",
+      "adapter_line": 271,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "GDA2PV",
+        "INIMENUTEXT"
+      ],
+      "services": [],
+      "other_callnats": [],
+      "classification": "language switch (FETCH RETURN RDCRINIP)"
+    },
+    {
+      "event": "onSeten",
+      "adapter_line": 284,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "GDA2PV",
+        "INIMENUTEXT"
+      ],
+      "services": [],
+      "other_callnats": [],
+      "classification": "language switch (FETCH RETURN RDCRINIP)"
+    },
+    {
+      "event": "onSetpo",
+      "adapter_line": 297,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "GDA2PV",
+        "INIMENUTEXT"
+      ],
+      "services": [],
+      "other_callnats": [],
+      "classification": "language switch (FETCH RETURN RDCRINIP)"
+    },
+    {
+      "event": "onSetsp",
+      "adapter_line": 309,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "GDA2PV",
+        "INIMENUTEXT"
+      ],
+      "services": [],
+      "other_callnats": [],
+      "classification": "language switch (FETCH RETURN RDCRINIP)"
+    },
+    {
+      "event": "onShowAll",
+      "adapter_line": 321,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": 76,
+      "performs": [
+        "SHOWALL",
+        "MAKE-ALLUNVISIBLE"
+      ],
+      "services": [
+        "CRLIST-N"
+      ],
+      "other_callnats": [],
+      "classification": "dispatches to business service"
+    },
+    {
+      "event": "onFav1button",
+      "adapter_line": 331,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "SHOWALL",
+        "MAKE-ALLUNVISIBLE"
+      ],
+      "services": [
+        "CRLIST-N"
+      ],
+      "other_callnats": [],
+      "classification": "dispatches to business service"
+    },
+    {
+      "event": "onFav2button",
+      "adapter_line": 340,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "SHOWALL",
+        "MAKE-ALLUNVISIBLE"
+      ],
+      "services": [
+        "CRLIST-N"
+      ],
+      "other_callnats": [],
+      "classification": "dispatches to business service"
+    },
+    {
+      "event": "onFav3button",
+      "adapter_line": 349,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "SHOWALL",
+        "MAKE-ALLUNVISIBLE"
+      ],
+      "services": [
+        "CRLIST-N"
+      ],
+      "other_callnats": [],
+      "classification": "dispatches to business service"
+    },
+    {
+      "event": "onFav4button",
+      "adapter_line": 358,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "SHOWALL",
+        "MAKE-ALLUNVISIBLE"
+      ],
+      "services": [
+        "CRLIST-N"
+      ],
+      "other_callnats": [],
+      "classification": "dispatches to business service"
+    },
+    {
+      "event": "onShowdetails1",
+      "adapter_line": 367,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "FILL-CRUISEDETAILS",
+        "MAKE-ALLUNVISIBLE"
+      ],
+      "services": [
+        "CRGET-N"
+      ],
+      "other_callnats": [
+        "MAKEURL"
+      ],
+      "classification": "dispatches to business service"
+    },
+    {
+      "event": "onShowdetails2",
+      "adapter_line": 378,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "FILL-CRUISEDETAILS",
+        "MAKE-ALLUNVISIBLE"
+      ],
+      "services": [
+        "CRGET-N"
+      ],
+      "other_callnats": [
+        "MAKEURL"
+      ],
+      "classification": "dispatches to business service"
+    },
+    {
+      "event": "onShowdetails3",
+      "adapter_line": 388,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "FILL-CRUISEDETAILS",
+        "MAKE-ALLUNVISIBLE"
+      ],
+      "services": [
+        "CRGET-N"
+      ],
+      "other_callnats": [
+        "MAKEURL"
+      ],
+      "classification": "dispatches to business service"
+    },
+    {
+      "event": "onShowdetails4",
+      "adapter_line": 398,
+      "declared_in_ui": 1,
+      "raised_via_menu_line": null,
+      "performs": [
+        "FILL-CRUISEDETAILS",
+        "MAKE-ALLUNVISIBLE"
+      ],
+      "services": [
+        "CRGET-N"
+      ],
+      "other_callnats": [
+        "MAKEURL"
+      ],
+      "classification": "dispatches to business service"
+    },
+    {
+      "event": "lines.onpvLineClick",
+      "adapter_line": 408,
+      "declared_in_ui": 2,
+      "raised_via_menu_line": null,
+      "performs": [
+        "FILL-CRUISEDETAILS",
+        "MAKE-ALLUNVISIBLE"
+      ],
+      "services": [
+        "CRGET-N"
+      ],
+      "other_callnats": [
+        "MAKEURL"
+      ],
+      "classification": "dispatches to business service"
+    },
+    {
+      "event": "onCrdetClose",
+      "adapter_line": 418,
+      "declared_in_ui": 0,
+      "raised_via_menu_line": null,
+      "performs": [],
+      "services": [],
+      "other_callnats": [],
+      "classification": "ignored (IGNORE)"
+    },
+    {
+      "event": "onExit",
+      "adapter_line": 429,
+      "declared_in_ui": 0,
+      "raised_via_menu_line": 78,
+      "performs": [],
+      "services": [],
+      "other_callnats": [],
+      "classification": "session end (TERMINATE)"
+    },
+    {
+      "event": "NONE VALUE",
+      "adapter_line": 434,
+      "declared_in_ui": 0,
+      "raised_via_menu_line": null,
+      "performs": [],
+      "services": [],
+      "other_callnats": [],
+      "classification": "page refresh only"
+    }
+  ],
+  "ui_events_declared_not_handled": [],
+  "adapter_handlers_not_declared_in_ui": [
+    "nat:page.end",
+    "onCloseMydata",
+    "onCrdetClose",
+    "onFacebook",
+    "onTwitter"
+  ],
+  "adapter_handlers_raised_only_via_menu": [
+    "onExit",
+    "onQuestion"
+  ],
+  "menu_methods": {
+    "onHome": 73,
+    "onHotcruises": 74,
+    "onFavorites": 75,
+    "onShowAll": 76,
+    "onQuestion": 77,
+    "onExit": 78
+  },
+  "services": {
+    "CRLIST-N": {
+      "object": "CRLIST-N",
+      "path": "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CRLIST-N.NSN",
+      "lines": 102,
+      "emitted": [
+        {
+          "code": 9999,
+          "line": 43,
+          "text_en": "Function not yet supported",
+          "success_remap": false
+        },
+        {
+          "code": 9857,
+          "line": 90,
+          "text_en": "no Cruise Data found",
+          "success_remap": false
+        },
+        {
+          "code": 9807,
+          "line": 92,
+          "text_en": "List of Cruises shown",
+          "success_remap": true
+        }
+      ],
+      "commented_out_emits": [],
+      "boundaries": [
+        {
+          "statement": "ON ERROR",
+          "line": 29,
+          "text": "ON ERROR"
+        },
+        {
+          "statement": "ESCAPE ROUTINE",
+          "line": 32,
+          "text": "ESCAPE ROUTINE"
+        },
+        {
+          "statement": "READ",
+          "line": 51,
+          "text": "READ NCCRUISE DESCENDING BY START-DATE"
+        },
+        {
+          "statement": "FIND",
+          "line": 80,
+          "text": "FIND NCYACHT NCYACHT.YACHT-ID = NCCRUISE.ID-YACHT"
+        }
+      ],
+      "has_end_transaction": false,
+      "has_backout_transaction": false,
+      "student_gate": true
+    },
+    "CRGET-N": {
+      "object": "CRGET-N",
+      "path": "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CRGET-N.NSN",
+      "lines": 127,
+      "emitted": [
+        {
+          "code": 9934,
+          "line": 116,
+          "text_en": "Customer changed from another user",
+          "success_remap": false
+        }
+      ],
+      "commented_out_emits": [
+        {
+          "code": 9915,
+          "line": 93,
+          "text_en": "only 1-3 Weeks possible",
+          "success_remap": false
+        }
+      ],
+      "boundaries": [
+        {
+          "statement": "ON ERROR",
+          "line": 33,
+          "text": "ON ERROR"
+        },
+        {
+          "statement": "ESCAPE ROUTINE",
+          "line": 36,
+          "text": "ESCAPE ROUTINE"
+        },
+        {
+          "statement": "READ",
+          "line": 49,
+          "text": "READ (1) NCCRUISE BY CRUISE-ID = P-SELCRUISEID"
+        },
+        {
+          "statement": "FIND",
+          "line": 101,
+          "text": "FIND YACHT-PICTURE WITH YACHT-PICTURE.YACHT-ID = NCCRUISE.ID-YACHT"
+        }
+      ],
+      "has_end_transaction": false,
+      "has_backout_transaction": false,
+      "student_gate": false
+    },
+    "CUGET-N": {
+      "object": "CUGET-N",
+      "path": "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CUGET-N.NSN",
+      "lines": 106,
+      "emitted": [
+        {
+          "code": 9999,
+          "line": 52,
+          "text_en": "Function not yet supported",
+          "success_remap": false
+        },
+        {
+          "code": 9924,
+          "line": 61,
+          "text_en": "Customer Id not found",
+          "success_remap": false
+        },
+        {
+          "code": 9923,
+          "line": 76,
+          "text_en": "Customer Id missing",
+          "success_remap": false
+        }
+      ],
+      "commented_out_emits": [],
+      "boundaries": [
+        {
+          "statement": "ON ERROR",
+          "line": 37,
+          "text": "ON ERROR"
+        },
+        {
+          "statement": "ESCAPE ROUTINE",
+          "line": 39,
+          "text": "ESCAPE ROUTINE"
+        },
+        {
+          "statement": "FIND",
+          "line": 58,
+          "text": "FIND NCCUSTOMER WITH PERSON-ID = #PERSON-ID"
+        },
+        {
+          "statement": "READ",
+          "line": 69,
+          "text": "READ NCCUSTOMER"
+        }
+      ],
+      "has_end_transaction": false,
+      "has_backout_transaction": false,
+      "student_gate": true
+    },
+    "CUNEW-N": {
+      "object": "CUNEW-N",
+      "path": "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CUNEW-N.NSN",
+      "lines": 69,
+      "emitted": [
+        {
+          "code": 9999,
+          "line": 37,
+          "text_en": "Function not yet supported",
+          "success_remap": false
+        }
+      ],
+      "commented_out_emits": [],
+      "boundaries": [
+        {
+          "statement": "ON ERROR",
+          "line": 24,
+          "text": "ON ERROR"
+        },
+        {
+          "statement": "ESCAPE ROUTINE",
+          "line": 26,
+          "text": "ESCAPE ROUTINE"
+        },
+        {
+          "statement": "READ",
+          "line": 41,
+          "text": "READ (1) NCCUSTOMER DESCENDING BY PERSON-ID"
+        },
+        {
+          "statement": "UPDATE",
+          "line": 42,
+          "text": "UPDATE"
+        },
+        {
+          "statement": "STORE",
+          "line": 56,
+          "text": "STORE NCCUSTOMER"
+        },
+        {
+          "statement": "END TRANSACTION",
+          "line": 57,
+          "text": "END TRANSACTION"
+        }
+      ],
+      "has_end_transaction": true,
+      "has_backout_transaction": false,
+      "student_gate": true
+    },
+    "CUMOD-N": {
+      "object": "CUMOD-N",
+      "path": "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CUMOD-N.NSN",
+      "lines": 79,
+      "emitted": [
+        {
+          "code": 9999,
+          "line": 37,
+          "text_en": "Function not yet supported",
+          "success_remap": false
+        },
+        {
+          "code": 9924,
+          "line": 46,
+          "text_en": "Customer Id not found",
+          "success_remap": false
+        },
+        {
+          "code": 9934,
+          "line": 67,
+          "text_en": "Customer changed from another user",
+          "success_remap": false
+        }
+      ],
+      "commented_out_emits": [],
+      "boundaries": [
+        {
+          "statement": "ON ERROR",
+          "line": 25,
+          "text": "ON ERROR"
+        },
+        {
+          "statement": "ESCAPE ROUTINE",
+          "line": 27,
+          "text": "ESCAPE ROUTINE"
+        },
+        {
+          "statement": "FIND",
+          "line": 44,
+          "text": "FIND (1) NCCUSTOMER WITH PERSON-ID =  V-PERSONID"
+        },
+        {
+          "statement": "UPDATE",
+          "line": 63,
+          "text": "UPDATE (F1.)"
+        },
+        {
+          "statement": "END TRANSACTION",
+          "line": 64,
+          "text": "END TRANSACTION"
+        }
+      ],
+      "has_end_transaction": true,
+      "has_backout_transaction": false,
+      "student_gate": true
+    },
+    "CONEW-N": {
+      "object": "CONEW-N",
+      "path": "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN",
+      "lines": 233,
+      "emitted": [
+        {
+          "code": 9999,
+          "line": 50,
+          "text_en": "Function not yet supported",
+          "success_remap": false
+        },
+        {
+          "code": 9904,
+          "line": 56,
+          "text_en": "Customer Id missing",
+          "success_remap": false
+        },
+        {
+          "code": 9905,
+          "line": 58,
+          "text_en": "Cruise Id missing",
+          "success_remap": false
+        },
+        {
+          "code": 9905,
+          "line": 64,
+          "text_en": "Cruise Id missing",
+          "success_remap": false
+        },
+        {
+          "code": 9904,
+          "line": 70,
+          "text_en": "Customer Id missing",
+          "success_remap": false
+        },
+        {
+          "code": 9902,
+          "line": 130,
+          "text_en": "Cruise no longer available",
+          "success_remap": false
+        },
+        {
+          "code": 9902,
+          "line": 136,
+          "text_en": "Cruise no longer available",
+          "success_remap": false
+        },
+        {
+          "code": 9800,
+          "line": 153,
+          "text_en": "Travel Booking successful",
+          "success_remap": true
+        },
+        {
+          "code": 9918,
+          "line": 159,
+          "text_en": "Customer Id not found",
+          "success_remap": false
+        }
+      ],
+      "commented_out_emits": [
+        {
+          "code": 9800,
+          "line": 164,
+          "text_en": "Travel Booking successful",
+          "success_remap": true
+        },
+        {
+          "code": 9915,
+          "line": 170,
+          "text_en": "only 1-3 Weeks possible",
+          "success_remap": false
+        },
+        {
+          "code": 9919,
+          "line": 174,
+          "text_en": "wrong Format for Customer Id",
+          "success_remap": false
+        },
+        {
+          "code": 9917,
+          "line": 181,
+          "text_en": "Format of Cruise Id invalid",
+          "success_remap": false
+        },
+        {
+          "code": 9916,
+          "line": 186,
+          "text_en": "Cruise Id not found",
+          "success_remap": false
+        },
+        {
+          "code": 9914,
+          "line": 194,
+          "text_en": "Format Date of Reservation invalid",
+          "success_remap": false
+        },
+        {
+          "code": 9913,
+          "line": 199,
+          "text_en": "Year of Reservation invalid (2015-2020)",
+          "success_remap": false
+        },
+        {
+          "code": 9912,
+          "line": 206,
+          "text_en": "invalid Date Format",
+          "success_remap": false
+        },
+        {
+          "code": 9911,
+          "line": 211,
+          "text_en": "Year of Booking invalid (2015-2020)",
+          "success_remap": false
+        }
+      ],
+      "boundaries": [
+        {
+          "statement": "ON ERROR",
+          "line": 36,
+          "text": "ON ERROR"
+        },
+        {
+          "statement": "BACKOUT TRANSACTION",
+          "line": 38,
+          "text": "BACKOUT TRANSACTION"
+        },
+        {
+          "statement": "ESCAPE ROUTINE",
+          "line": 39,
+          "text": "ESCAPE ROUTINE"
+        },
+        {
+          "statement": "FIND",
+          "line": 80,
+          "text": "FIND NCCRUISE WITH NCCRUISE.CRUISE-ID = ID-CRUISE-IN-N"
+        },
+        {
+          "statement": "GET",
+          "line": 82,
+          "text": "GET NCCRUISE *ISN(R1.)"
+        },
+        {
+          "statement": "UPDATE",
+          "line": 92,
+          "text": "UPDATE (G1.)"
+        },
+        {
+          "statement": "READ",
+          "line": 96,
+          "text": "READ (1) NCCONTRACT DESCENDING BY NCCONTRACT.CONTRACT-ID"
+        },
+        {
+          "statement": "UPDATE",
+          "line": 97,
+          "text": "UPDATE (R2.)"
+        },
+        {
+          "statement": "STORE",
+          "line": 116,
+          "text": "STORE NCCONTRACT"
+        },
+        {
+          "statement": "END TRANSACTION",
+          "line": 117,
+          "text": "END TRANSACTION"
+        },
+        {
+          "statement": "BACKOUT TRANSACTION",
+          "line": 122,
+          "text": "BACKOUT TRANSACTION"
+        },
+        {
+          "statement": "BACKOUT TRANSACTION",
+          "line": 129,
+          "text": "BACKOUT TRANSACTION"
+        },
+        {
+          "statement": "BACKOUT TRANSACTION",
+          "line": 134,
+          "text": "BACKOUT TRANSACTION"
+        },
+        {
+          "statement": "FIND",
+          "line": 157,
+          "text": "FIND NCCUSTOMER PERSON-ID = ID-CUSTOMER-IN-N"
+        },
+        {
+          "statement": "ESCAPE ROUTINE",
+          "line": 160,
+          "text": "ESCAPE ROUTINE"
+        }
+      ],
+      "has_end_transaction": true,
+      "has_backout_transaction": true,
+      "student_gate": true
+    }
+  },
+  "processes": [
+    {
+      "id": "P1",
+      "title": "List cruises",
+      "services": [
+        "CRLIST-N"
+      ],
+      "events": [
+        "onShowAll",
+        "onFav1button",
+        "onFav2button",
+        "onFav3button",
+        "onFav4button"
+      ],
+      "message_codes": [
+        9807,
+        9857,
+        9999
+      ]
+    },
+    {
+      "id": "P2",
+      "title": "Cruise detail",
+      "services": [
+        "CRGET-N"
+      ],
+      "events": [
+        "onHotcruises",
+        "onShowdetails1",
+        "onShowdetails2",
+        "onShowdetails3",
+        "onShowdetails4",
+        "lines.onpvLineClick"
+      ],
+      "message_codes": [
+        9934
+      ]
+    },
+    {
+      "id": "P3",
+      "title": "Customer lookup / create / modify",
+      "services": [
+        "CUGET-N",
+        "CUNEW-N",
+        "CUMOD-N"
+      ],
+      "events": [
+        "onLoginbutton",
+        "onMydataSave"
+      ],
+      "message_codes": [
+        9923,
+        9924,
+        9934,
+        9999
+      ]
+    },
+    {
+      "id": "P4",
+      "title": "Book cruise",
+      "services": [
+        "CONEW-N"
+      ],
+      "events": [
+        "onBookingSave"
+      ],
+      "message_codes": [
+        9800,
+        9902,
+        9904,
+        9905,
+        9918,
+        9999
+      ]
+    }
+  ],
+  "camsg": {
+    "path": "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CAMSG-N.NSN",
+    "success_remap_codes": [
+      9800,
+      9801,
+      9803,
+      9804,
+      9805,
+      9806,
+      9807
+    ],
+    "catalog_size": 31
+  },
+  "camsg_catalog_codes": [
+    9800,
+    9801,
+    9803,
+    9804,
+    9805,
+    9806,
+    9807,
+    9855,
+    9856,
+    9857,
+    9901,
+    9902,
+    9903,
+    9904,
+    9905,
+    9911,
+    9912,
+    9913,
+    9914,
+    9915,
+    9916,
+    9917,
+    9918,
+    9919,
+    9921,
+    9922,
+    9923,
+    9924,
+    9934,
+    9935,
+    9999
+  ],
+  "control_totals": {
+    "ui_events_declared_distinct": 27,
+    "ui_method_declarations_total": 28,
+    "adapter_event_branches": 34,
+    "ui_events_declared_not_handled": 0,
+    "adapter_handlers_not_declared_in_ui": 5,
+    "adapter_handlers_raised_only_via_menu": 2,
+    "events_by_classification": {
+      "UI state only (visibility / GDA moves)": 10,
+      "dispatches to business service": 14,
+      "ignored (IGNORE)": 2,
+      "language switch (FETCH RETURN RDCRINIP)": 4,
+      "page refresh only": 4,
+      "session end (TERMINATE)": 1
+    },
+    "commented_out_callnats_in_adapter": 6,
+    "services_with_end_transaction": [
+      "CONEW-N",
+      "CUMOD-N",
+      "CUNEW-N"
+    ],
+    "services_with_backout_transaction": [
+      "CONEW-N"
+    ],
+    "emitted_codes_by_service": {
+      "CRLIST-N": [
+        9807,
+        9857,
+        9999
+      ],
+      "CRGET-N": [
+        9934
+      ],
+      "CUGET-N": [
+        9923,
+        9924,
+        9999
+      ],
+      "CUNEW-N": [
+        9999
+      ],
+      "CUMOD-N": [
+        9924,
+        9934,
+        9999
+      ],
+      "CONEW-N": [
+        9800,
+        9902,
+        9904,
+        9905,
+        9918,
+        9999
+      ]
+    },
+    "commented_out_emits_by_service": {
+      "CRLIST-N": 0,
+      "CRGET-N": 1,
+      "CUGET-N": 0,
+      "CUNEW-N": 0,
+      "CUMOD-N": 0,
+      "CONEW-N": 9
+    }
+  }
+}

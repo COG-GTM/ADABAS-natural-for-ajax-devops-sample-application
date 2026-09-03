@@ -1,0 +1,414 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Book cruise (P4) - BPMN 2.0 process model (designed).
+
+  Hand-authored from the Sunny Islands Cruise sample sources:
+    adapter  SunnyIslands/Natural-Libraries/RDCRUISE/Programs/RDCRUISP.NSP:171-174, 572-601
+    service  SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:36-162
+    catalog  SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CAMSG-N.NSN
+  Lanes, gateways and events mirror process-flows.md section "P4 - Book cruise".
+  Line numbers in documentation attributes are source line references.
+
+  Status: (designed). The document is well-formed XML and uses the OMG BPMN 2.0
+  namespaces; it has not been validated against the BPMN 2.0 XSD in this
+  repository, and the diagram-interchange (BPMNDI) section is omitted on
+  purpose so that an SI's tool lays the shapes out on import (see
+  import-notes.md).
+
+  Synthetic data only; no production system or FPPS source is used.
+  FPPS analogy: the transaction subprocess is the shape of a personnel /
+  payroll transaction - held availability record, serialised document number,
+  all-or-nothing commit.
+-->
+<bpmn:definitions
+    xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    id="Definitions_BookCruise"
+    name="Sunny Islands - Book cruise (designed)"
+    targetNamespace="urn:cog-gtm:fpps-hcm-deliverable:04-bpmn"
+    exporter="hand-authored"
+    exporterVersion="1.0">
+
+  <!-- ===================== errors (CAMSG-N message codes) ===================== -->
+  <bpmn:error id="Error_9999" name="9999 Function not yet supported" errorCode="9999"/>
+  <bpmn:error id="Error_9904" name="9904 Customer Id missing" errorCode="9904"/>
+  <bpmn:error id="Error_9905" name="9905 Cruise Id missing" errorCode="9905"/>
+  <bpmn:error id="Error_9902" name="9902 Cruise no longer available" errorCode="9902"/>
+  <bpmn:error id="Error_9918" name="9918 Customer Id not found" errorCode="9918"/>
+  <bpmn:error id="Error_Runtime" name="Natural runtime error (ON ERROR)" errorCode="ON-ERROR"/>
+  <bpmn:message id="Message_LoginRequired" name="G-LOGINALERTTXT (login required, no service call)"/>
+
+  <!-- ===================== data stores (ADABAS logical files) ================= -->
+  <bpmn:dataStore id="DataStore_NCCRUISE" name="NCCRUISE"/>
+  <bpmn:dataStore id="DataStore_NCCONTRACT" name="NCCONTRACT"/>
+  <bpmn:dataStore id="DataStore_NCCUSTOMER" name="NCCUSTOMER"/>
+
+  <bpmn:collaboration id="Collaboration_BookCruise">
+    <bpmn:participant id="Participant_SunnyIslands" name="Sunny Islands Cruise (Natural for AJAX / ADABAS)" processRef="Process_BookCruise"/>
+  </bpmn:collaboration>
+
+  <bpmn:process id="Process_BookCruise" name="Book cruise" isExecutable="false">
+    <bpmn:documentation>Trigger onBookingSave -> UPDATEBOOKING -> CONEW-N. Success returns the new contract id; every failure after the cruise record is held is compensated by BACKOUT TRANSACTION.</bpmn:documentation>
+
+    <!-- ===================== lanes ===================== -->
+    <bpmn:laneSet id="LaneSet_BookCruise">
+      <bpmn:lane id="Lane_Browser" name="Browser (rdcruisx.xml)">
+        <bpmn:flowNodeRef>StartEvent_onBookingSave</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_ContractStored</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_LoginRequired</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_ErrorShown</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Adapter" name="NJX adapter (RDCRUISP.NSP)">
+        <bpmn:flowNodeRef>Gateway_LoggedIn</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_BuildContractData</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_RspCodeZero</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Service" name="Business service (CONEW-N.NSN)">
+        <bpmn:flowNodeRef>Gateway_Student</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_CustomerBlank</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_CruiseBlank</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_CruiseNumeric</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_CustomerNumeric</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_FindCruise</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_CruiseFound</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_Code0NoContract</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Transaction_Booking</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ReturnContractId</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>BoundaryEvent_Tx_Cancel</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_PendingCode</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>BoundaryEvent_Tx_Runtime</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_9999</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_9904</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_9905</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_9902</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_9918</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_Runtime</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_CamsgTranslate</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_ADABAS" name="ADABAS (NCCRUISE, NCCONTRACT, NCCUSTOMER)">
+        <bpmn:flowNodeRef>DataStoreRef_NCCRUISE</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>DataStoreRef_NCCONTRACT</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>DataStoreRef_NCCUSTOMER</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <bpmn:dataStoreReference id="DataStoreRef_NCCRUISE" name="NCCRUISE" dataStoreRef="DataStore_NCCRUISE"/>
+    <bpmn:dataStoreReference id="DataStoreRef_NCCONTRACT" name="NCCONTRACT" dataStoreRef="DataStore_NCCONTRACT"/>
+    <bpmn:dataStoreReference id="DataStoreRef_NCCUSTOMER" name="NCCUSTOMER" dataStoreRef="DataStore_NCCUSTOMER"/>
+
+    <!-- ===================== browser lane ===================== -->
+    <bpmn:startEvent id="StartEvent_onBookingSave" name="onBookingSave">
+      <bpmn:documentation>rdcruisx.xml method="onBookingSave"; RDCRUISP.NSP:171-174</bpmn:documentation>
+      <bpmn:outgoing>Flow_Start_LoggedIn</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:endEvent id="EndEvent_ContractStored" name="Detail alert: contract stored + new contract id">
+      <bpmn:documentation>RDCRUISP.NSP:585-586 (G-CONTRACTSTOREMSG P-NEW-CONTRACTID)</bpmn:documentation>
+      <bpmn:incoming>Flow_RspZero_Yes</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="EndEvent_LoginRequired" name="Detail alert: login required (no service call)">
+      <bpmn:documentation>RDCRUISP.NSP:592-597</bpmn:documentation>
+      <bpmn:incoming>Flow_LoggedIn_No</bpmn:incoming>
+      <bpmn:messageEventDefinition id="MsgDef_LoginRequired" messageRef="Message_LoginRequired"/>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="EndEvent_ErrorShown" name="Detail alert: code + text">
+      <bpmn:documentation>RDCRUISP.NSP:588-589 (P-RSPCODE P-RSPTXT)</bpmn:documentation>
+      <bpmn:incoming>Flow_RspZero_No</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- ===================== adapter lane ===================== -->
+    <bpmn:exclusiveGateway id="Gateway_LoggedIn" name="G-LOGGEDIN? (:575)" default="Flow_LoggedIn_No">
+      <bpmn:incoming>Flow_Start_LoggedIn</bpmn:incoming>
+      <bpmn:outgoing>Flow_LoggedIn_Yes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_LoggedIn_No</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="Task_BuildContractData" name="Build P-CONTRACT-DATA from session customer and displayed cruise; CALLNAT CONEW-N (:577-581)">
+      <bpmn:incoming>Flow_LoggedIn_Yes</bpmn:incoming>
+      <bpmn:outgoing>Flow_Build_Student</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="Gateway_RspCodeZero" name="P-RSPCODE = '0'? (:584)" default="Flow_RspZero_No">
+      <bpmn:incoming>Flow_Camsg_Rsp</bpmn:incoming>
+      <bpmn:outgoing>Flow_RspZero_Yes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_RspZero_No</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- ===================== service lane: input edits ===================== -->
+    <bpmn:exclusiveGateway id="Gateway_Student" name="#STUDENT? (:48)" default="Flow_Student_No">
+      <bpmn:documentation>#STUDENT is INIT FALSE (NCDATA-L.NSL:86); branch present in executable code, not taken in shipped configuration.</bpmn:documentation>
+      <bpmn:incoming>Flow_Build_Student</bpmn:incoming>
+      <bpmn:outgoing>Flow_Student_Yes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Student_No</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:exclusiveGateway id="Gateway_CustomerBlank" name="Customer Id blank or '0'? (:55)" default="Flow_CustBlank_No">
+      <bpmn:incoming>Flow_Student_No</bpmn:incoming>
+      <bpmn:outgoing>Flow_CustBlank_Yes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_CustBlank_No</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:exclusiveGateway id="Gateway_CruiseBlank" name="Cruise Id blank or '0'? (:57)" default="Flow_CruiseBlank_No">
+      <bpmn:incoming>Flow_CustBlank_No</bpmn:incoming>
+      <bpmn:outgoing>Flow_CruiseBlank_Yes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_CruiseBlank_No</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:exclusiveGateway id="Gateway_CruiseNumeric" name="Cruise Id IS (N8)? (:60)" default="Flow_CruiseNum_No">
+      <bpmn:incoming>Flow_CruiseBlank_No</bpmn:incoming>
+      <bpmn:outgoing>Flow_CruiseNum_Yes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_CruiseNum_No</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:exclusiveGateway id="Gateway_CustomerNumeric" name="Customer Id IS (N8)? (:66)" default="Flow_CustNum_No">
+      <bpmn:incoming>Flow_CruiseNum_Yes</bpmn:incoming>
+      <bpmn:outgoing>Flow_CustNum_Yes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_CustNum_No</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Task_FindCruise" name="FIND NCCRUISE WITH CRUISE-ID (:80)">
+      <bpmn:incoming>Flow_CustNum_Yes</bpmn:incoming>
+      <bpmn:outgoing>Flow_Find_Found</bpmn:outgoing>
+      <bpmn:property id="Property_FindCruise" name="cruise"/>
+      <bpmn:dataInputAssociation id="DIA_FindCruise">
+        <bpmn:sourceRef>DataStoreRef_NCCRUISE</bpmn:sourceRef>
+        <bpmn:targetRef>Property_FindCruise</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Gateway_CruiseFound" name="Cruise record found? (:80-139)" default="Flow_Found_No">
+      <bpmn:documentation>The FIND body (:81-139) runs only for a matching NCCRUISE record. With no match MSG-NR keeps INIT 0 (NCDATA-L.NSL:78) and CAMSG-N types it as success. Candidate defect, static evidence only.</bpmn:documentation>
+      <bpmn:incoming>Flow_Find_Found</bpmn:incoming>
+      <bpmn:outgoing>Flow_Found_Yes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Found_No</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="EndEvent_Code0NoContract" name="Code 0 without a stored contract (candidate defect; 9916 'Cruise Id not found' emitted only in commented code :184-188)">
+      <bpmn:incoming>Flow_Found_No</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- ===================== service lane: transaction scope ===================== -->
+    <bpmn:transaction id="Transaction_Booking" name="Transaction scope (END TRANSACTION / BACKOUT TRANSACTION) :82-134" method="##Compensate">
+      <bpmn:documentation>Everything between the first hold (GET NCCRUISE *ISN(R1.) :82) and END TRANSACTION (:117). Cancel end-events inside the scope trigger the compensation handler (BACKOUT TRANSACTION :122, :129, :134) which undoes the CRUISE-STATUS decrement and releases the held NCCRUISE and NCCONTRACT records.</bpmn:documentation>
+      <bpmn:incoming>Flow_Found_Yes</bpmn:incoming>
+      <bpmn:outgoing>Flow_Tx_Success</bpmn:outgoing>
+
+      <bpmn:startEvent id="Tx_Start" name="Cruise located">
+        <bpmn:outgoing>Tx_Flow_Start_Get</bpmn:outgoing>
+      </bpmn:startEvent>
+
+      <bpmn:serviceTask id="Tx_Task_GetHeld" name="GET NCCRUISE *ISN(R1.) - record held (:82)">
+        <bpmn:incoming>Tx_Flow_Start_Get</bpmn:incoming>
+        <bpmn:outgoing>Tx_Flow_Get_Avail</bpmn:outgoing>
+        <bpmn:property id="Tx_Property_HeldCruise" name="heldCruise"/>
+        <bpmn:dataInputAssociation id="Tx_DIA_GetHeld">
+          <bpmn:sourceRef>DataStoreRef_NCCRUISE</bpmn:sourceRef>
+          <bpmn:targetRef>Tx_Property_HeldCruise</bpmn:targetRef>
+        </bpmn:dataInputAssociation>
+      </bpmn:serviceTask>
+
+      <bpmn:exclusiveGateway id="Tx_Gateway_Available" name="CRUISE-STATUS &gt; 0 on held record? (:86)" default="Tx_Flow_Avail_No">
+        <bpmn:incoming>Tx_Flow_Get_Avail</bpmn:incoming>
+        <bpmn:outgoing>Tx_Flow_Avail_Yes</bpmn:outgoing>
+        <bpmn:outgoing>Tx_Flow_Avail_No</bpmn:outgoing>
+      </bpmn:exclusiveGateway>
+
+      <bpmn:serviceTask id="Tx_Task_Decrement" name="CRUISE-STATUS := status - 1; UPDATE (G1.) (:89-92)">
+        <bpmn:incoming>Tx_Flow_Avail_Yes</bpmn:incoming>
+        <bpmn:outgoing>Tx_Flow_Decr_ReadMax</bpmn:outgoing>
+        <bpmn:dataOutputAssociation id="Tx_DOA_Decrement">
+          <bpmn:targetRef>DataStoreRef_NCCRUISE</bpmn:targetRef>
+        </bpmn:dataOutputAssociation>
+      </bpmn:serviceTask>
+
+      <bpmn:serviceTask id="Tx_Task_ReadMaxContract" name="READ (1) NCCONTRACT DESCENDING BY CONTRACT-ID; UPDATE (R2.) = fake update, record held (:96-97)">
+        <bpmn:incoming>Tx_Flow_Decr_ReadMax</bpmn:incoming>
+        <bpmn:outgoing>Tx_Flow_ReadMax_Gw</bpmn:outgoing>
+        <bpmn:property id="Tx_Property_MaxContract" name="maxContract"/>
+        <bpmn:dataInputAssociation id="Tx_DIA_ReadMax">
+          <bpmn:sourceRef>DataStoreRef_NCCONTRACT</bpmn:sourceRef>
+          <bpmn:targetRef>Tx_Property_MaxContract</bpmn:targetRef>
+        </bpmn:dataInputAssociation>
+      </bpmn:serviceTask>
+
+      <bpmn:exclusiveGateway id="Tx_Gateway_ContractRead" name="Contract record read? (:126 LOCAL-NEWCONTRACTID = 0 guards the empty file)" default="Tx_Flow_ReadMax_Yes">
+        <bpmn:incoming>Tx_Flow_ReadMax_Gw</bpmn:incoming>
+        <bpmn:outgoing>Tx_Flow_ReadMax_Yes</bpmn:outgoing>
+        <bpmn:outgoing>Tx_Flow_ReadMax_Empty</bpmn:outgoing>
+      </bpmn:exclusiveGateway>
+
+      <bpmn:task id="Tx_Task_BuildContract" name="CONTRACT-ID := MAX+1; PRICE := PRICE-1W; DATE-BOOKING := *DATN; ID-CRUISE, ID-CUSTOMER (:99-112)">
+        <bpmn:incoming>Tx_Flow_ReadMax_Yes</bpmn:incoming>
+        <bpmn:outgoing>Tx_Flow_Build_Handle</bpmn:outgoing>
+      </bpmn:task>
+
+      <bpmn:serviceTask id="Tx_Task_HandleInputData" name="HANDLE-INPUT-DATA: MSG-NR := 9800; FIND NCCUSTOMER PERSON-ID (:151-162)">
+        <bpmn:incoming>Tx_Flow_Build_Handle</bpmn:incoming>
+        <bpmn:outgoing>Tx_Flow_Handle_CustFound</bpmn:outgoing>
+        <bpmn:property id="Tx_Property_Customer" name="customer"/>
+        <bpmn:dataInputAssociation id="Tx_DIA_Customer">
+          <bpmn:sourceRef>DataStoreRef_NCCUSTOMER</bpmn:sourceRef>
+          <bpmn:targetRef>Tx_Property_Customer</bpmn:targetRef>
+        </bpmn:dataInputAssociation>
+      </bpmn:serviceTask>
+
+      <bpmn:exclusiveGateway id="Tx_Gateway_CustomerFound" name="Customer found? (:158) = MSG-NR = 9800? (:115)" default="Tx_Flow_CustFound_No">
+        <bpmn:incoming>Tx_Flow_Handle_CustFound</bpmn:incoming>
+        <bpmn:outgoing>Tx_Flow_CustFound_Yes</bpmn:outgoing>
+        <bpmn:outgoing>Tx_Flow_CustFound_No</bpmn:outgoing>
+      </bpmn:exclusiveGateway>
+
+      <bpmn:serviceTask id="Tx_Task_StoreContract" name="STORE NCCONTRACT (:116)">
+        <bpmn:incoming>Tx_Flow_CustFound_Yes</bpmn:incoming>
+        <bpmn:outgoing>Tx_Flow_Store_Commit</bpmn:outgoing>
+        <bpmn:dataOutputAssociation id="Tx_DOA_Store">
+          <bpmn:targetRef>DataStoreRef_NCCONTRACT</bpmn:targetRef>
+        </bpmn:dataOutputAssociation>
+      </bpmn:serviceTask>
+
+      <bpmn:endEvent id="Tx_End_Commit" name="END TRANSACTION (:117)">
+        <bpmn:incoming>Tx_Flow_Store_Commit</bpmn:incoming>
+      </bpmn:endEvent>
+
+      <!-- cancel end-events: each one triggers the compensation handler (BACKOUT TRANSACTION) -->
+      <bpmn:endEvent id="Tx_End_Cancel_NotAvailable" name="Not available -> 9902 (:129-130)">
+        <bpmn:incoming>Tx_Flow_Avail_No</bpmn:incoming>
+        <bpmn:cancelEventDefinition id="Tx_CancelDef_NotAvailable"/>
+      </bpmn:endEvent>
+      <bpmn:endEvent id="Tx_End_Cancel_EmptyContracts" name="Empty NCCONTRACT -> 9902 (:134-136)">
+        <bpmn:incoming>Tx_Flow_ReadMax_Empty</bpmn:incoming>
+        <bpmn:cancelEventDefinition id="Tx_CancelDef_EmptyContracts"/>
+      </bpmn:endEvent>
+      <bpmn:endEvent id="Tx_End_Cancel_CustomerNotFound" name="Customer not found -> 9918 (:122, :159)">
+        <bpmn:incoming>Tx_Flow_CustFound_No</bpmn:incoming>
+        <bpmn:cancelEventDefinition id="Tx_CancelDef_CustomerNotFound"/>
+      </bpmn:endEvent>
+
+      <!-- compensation handler = BACKOUT TRANSACTION -->
+      <bpmn:boundaryEvent id="Tx_Boundary_Compensate" name="compensate" attachedToRef="Tx_Task_Decrement">
+        <bpmn:compensateEventDefinition id="Tx_CompDef_Decrement"/>
+      </bpmn:boundaryEvent>
+      <bpmn:task id="Tx_Task_Backout" name="BACKOUT TRANSACTION - undo CRUISE-STATUS decrement, release held NCCRUISE / NCCONTRACT (:122, :129, :134)" isForCompensation="true">
+        <bpmn:documentation>Also reached from ON ERROR (:36-40): INCLUDE ERRLOG-I, BACKOUT TRANSACTION, ESCAPE ROUTINE.</bpmn:documentation>
+      </bpmn:task>
+      <bpmn:association id="Assoc_Compensate" associationDirection="One" sourceRef="Tx_Boundary_Compensate" targetRef="Tx_Task_Backout"/>
+
+      <bpmn:sequenceFlow id="Tx_Flow_Start_Get" sourceRef="Tx_Start" targetRef="Tx_Task_GetHeld"/>
+      <bpmn:sequenceFlow id="Tx_Flow_Get_Avail" sourceRef="Tx_Task_GetHeld" targetRef="Tx_Gateway_Available"/>
+      <bpmn:sequenceFlow id="Tx_Flow_Avail_Yes" name="yes" sourceRef="Tx_Gateway_Available" targetRef="Tx_Task_Decrement">
+        <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">LOCAL-AVAIL GT 0</bpmn:conditionExpression>
+      </bpmn:sequenceFlow>
+      <bpmn:sequenceFlow id="Tx_Flow_Avail_No" name="no" sourceRef="Tx_Gateway_Available" targetRef="Tx_End_Cancel_NotAvailable"/>
+      <bpmn:sequenceFlow id="Tx_Flow_Decr_ReadMax" sourceRef="Tx_Task_Decrement" targetRef="Tx_Task_ReadMaxContract"/>
+      <bpmn:sequenceFlow id="Tx_Flow_ReadMax_Gw" sourceRef="Tx_Task_ReadMaxContract" targetRef="Tx_Gateway_ContractRead"/>
+      <bpmn:sequenceFlow id="Tx_Flow_ReadMax_Yes" name="record read" sourceRef="Tx_Gateway_ContractRead" targetRef="Tx_Task_BuildContract"/>
+      <bpmn:sequenceFlow id="Tx_Flow_ReadMax_Empty" name="no record" sourceRef="Tx_Gateway_ContractRead" targetRef="Tx_End_Cancel_EmptyContracts">
+        <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">LOCAL-NEWCONTRACTID = 0</bpmn:conditionExpression>
+      </bpmn:sequenceFlow>
+      <bpmn:sequenceFlow id="Tx_Flow_Build_Handle" sourceRef="Tx_Task_BuildContract" targetRef="Tx_Task_HandleInputData"/>
+      <bpmn:sequenceFlow id="Tx_Flow_Handle_CustFound" sourceRef="Tx_Task_HandleInputData" targetRef="Tx_Gateway_CustomerFound"/>
+      <bpmn:sequenceFlow id="Tx_Flow_CustFound_Yes" name="yes" sourceRef="Tx_Gateway_CustomerFound" targetRef="Tx_Task_StoreContract">
+        <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">MSG-GROUP-PARA.MSG-NR = 9800</bpmn:conditionExpression>
+      </bpmn:sequenceFlow>
+      <bpmn:sequenceFlow id="Tx_Flow_CustFound_No" name="no" sourceRef="Tx_Gateway_CustomerFound" targetRef="Tx_End_Cancel_CustomerNotFound"/>
+      <bpmn:sequenceFlow id="Tx_Flow_Store_Commit" sourceRef="Tx_Task_StoreContract" targetRef="Tx_End_Commit"/>
+    </bpmn:transaction>
+
+    <!-- boundary events on the transaction: one cancel boundary (compensation has run =
+         BACKOUT TRANSACTION), then a gateway on the pending MSG-NR to the coded end-events -->
+    <bpmn:boundaryEvent id="BoundaryEvent_Tx_Cancel" name="cancelled after BACKOUT TRANSACTION" attachedToRef="Transaction_Booking">
+      <bpmn:documentation>Raised by every cancel end-event inside the scope once compensation (BACKOUT TRANSACTION :122, :129, :134) has completed.</bpmn:documentation>
+      <bpmn:outgoing>Flow_Tx_Cancel</bpmn:outgoing>
+      <bpmn:cancelEventDefinition id="CancelDef_Tx"/>
+    </bpmn:boundaryEvent>
+    <bpmn:exclusiveGateway id="Gateway_PendingCode" name="Pending MSG-NR? (:130, :136, :159)" default="Flow_Pending_9902">
+      <bpmn:incoming>Flow_Tx_Cancel</bpmn:incoming>
+      <bpmn:outgoing>Flow_Pending_9902</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Pending_9918</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:boundaryEvent id="BoundaryEvent_Tx_Runtime" name="ON ERROR (:36-40)" attachedToRef="Transaction_Booking">
+      <bpmn:outgoing>Flow_Tx_Runtime</bpmn:outgoing>
+      <bpmn:errorEventDefinition id="ErrDef_Tx_Runtime" errorRef="Error_Runtime"/>
+    </bpmn:boundaryEvent>
+
+    <bpmn:task id="Task_ReturnContractId" name="P-NEW-CONTRACTID := new id (:118)">
+      <bpmn:incoming>Flow_Tx_Success</bpmn:incoming>
+      <bpmn:outgoing>Flow_Return_Camsg</bpmn:outgoing>
+    </bpmn:task>
+
+    <!-- ===================== service lane: error end-events (message codes) ===================== -->
+    <bpmn:endEvent id="EndEvent_9999" name="9999 Function not yet supported">
+      <bpmn:incoming>Flow_Student_Yes</bpmn:incoming>
+      <bpmn:errorEventDefinition id="ErrDef_9999" errorRef="Error_9999"/>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="EndEvent_9904" name="9904 Customer Id missing">
+      <bpmn:incoming>Flow_CustBlank_Yes</bpmn:incoming>
+      <bpmn:incoming>Flow_CustNum_No</bpmn:incoming>
+      <bpmn:errorEventDefinition id="ErrDef_9904" errorRef="Error_9904"/>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="EndEvent_9905" name="9905 Cruise Id missing">
+      <bpmn:incoming>Flow_CruiseBlank_Yes</bpmn:incoming>
+      <bpmn:incoming>Flow_CruiseNum_No</bpmn:incoming>
+      <bpmn:errorEventDefinition id="ErrDef_9905" errorRef="Error_9905"/>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="EndEvent_9902" name="9902 Cruise no longer available">
+      <bpmn:incoming>Flow_Pending_9902</bpmn:incoming>
+      <bpmn:errorEventDefinition id="ErrDef_9902" errorRef="Error_9902"/>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="EndEvent_9918" name="9918 Customer Id not found">
+      <bpmn:incoming>Flow_Pending_9918</bpmn:incoming>
+      <bpmn:errorEventDefinition id="ErrDef_9918" errorRef="Error_9918"/>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="EndEvent_Runtime" name="Runtime error: logged (ERRLOG-I), backed out, no CAMSG-N text">
+      <bpmn:incoming>Flow_Tx_Runtime</bpmn:incoming>
+      <bpmn:errorEventDefinition id="ErrDef_Runtime" errorRef="Error_Runtime"/>
+    </bpmn:endEvent>
+
+    <!-- The error end-events above terminate the service-lane path in the model; in the
+         Natural source every one of them falls through to CAMSG-N, which turns the pending
+         MSG-NR into P-RSPCODE / P-RSPTXT for the adapter (CONEW-N.NSN:143-146). That
+         translation is modelled once, on the success path, and documented here. -->
+    <bpmn:serviceTask id="Task_CamsgTranslate" name="CALLNAT CAMSG-N: MSG-NR -> P-RSPCODE / P-RSPTXT; 9800 remapped to 0 (:143-146)">
+      <bpmn:documentation>Applies to every outcome except the ON ERROR path. Error end-events in this model carry the code that CAMSG-N translates.</bpmn:documentation>
+      <bpmn:incoming>Flow_Return_Camsg</bpmn:incoming>
+      <bpmn:outgoing>Flow_Camsg_Rsp</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- ===================== sequence flows (outside the transaction) ===================== -->
+    <bpmn:sequenceFlow id="Flow_Start_LoggedIn" sourceRef="StartEvent_onBookingSave" targetRef="Gateway_LoggedIn"/>
+    <bpmn:sequenceFlow id="Flow_LoggedIn_Yes" name="yes" sourceRef="Gateway_LoggedIn" targetRef="Task_BuildContractData">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">G-LOGGEDIN = TRUE</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_LoggedIn_No" name="no" sourceRef="Gateway_LoggedIn" targetRef="EndEvent_LoginRequired"/>
+    <bpmn:sequenceFlow id="Flow_Build_Student" sourceRef="Task_BuildContractData" targetRef="Gateway_Student"/>
+    <bpmn:sequenceFlow id="Flow_Student_Yes" name="yes" sourceRef="Gateway_Student" targetRef="EndEvent_9999">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">#STUDENT = TRUE</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Student_No" name="no" sourceRef="Gateway_Student" targetRef="Gateway_CustomerBlank"/>
+    <bpmn:sequenceFlow id="Flow_CustBlank_Yes" name="yes" sourceRef="Gateway_CustomerBlank" targetRef="EndEvent_9904">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">ID-CUSTOMER-IN = ' ' OR ID-CUSTOMER-IN = '0'</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_CustBlank_No" name="no" sourceRef="Gateway_CustomerBlank" targetRef="Gateway_CruiseBlank"/>
+    <bpmn:sequenceFlow id="Flow_CruiseBlank_Yes" name="yes" sourceRef="Gateway_CruiseBlank" targetRef="EndEvent_9905">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">ID-CRUISE-IN = ' ' OR ID-CRUISE-IN = '0'</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_CruiseBlank_No" name="no" sourceRef="Gateway_CruiseBlank" targetRef="Gateway_CruiseNumeric"/>
+    <bpmn:sequenceFlow id="Flow_CruiseNum_Yes" name="yes" sourceRef="Gateway_CruiseNumeric" targetRef="Gateway_CustomerNumeric">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">ID-CRUISE-IN IS (N8)</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_CruiseNum_No" name="no" sourceRef="Gateway_CruiseNumeric" targetRef="EndEvent_9905"/>
+    <bpmn:sequenceFlow id="Flow_CustNum_Yes" name="yes" sourceRef="Gateway_CustomerNumeric" targetRef="Task_FindCruise">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">ID-CUSTOMER-IN IS (N8)</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_CustNum_No" name="no" sourceRef="Gateway_CustomerNumeric" targetRef="EndEvent_9904"/>
+    <bpmn:sequenceFlow id="Flow_Find_Found" sourceRef="Task_FindCruise" targetRef="Gateway_CruiseFound"/>
+    <bpmn:sequenceFlow id="Flow_Found_Yes" name="yes" sourceRef="Gateway_CruiseFound" targetRef="Transaction_Booking">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">*NUMBER(R1.) GT 0</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Found_No" name="no" sourceRef="Gateway_CruiseFound" targetRef="EndEvent_Code0NoContract"/>
+    <bpmn:sequenceFlow id="Flow_Tx_Success" name="committed" sourceRef="Transaction_Booking" targetRef="Task_ReturnContractId"/>
+    <bpmn:sequenceFlow id="Flow_Tx_Cancel" sourceRef="BoundaryEvent_Tx_Cancel" targetRef="Gateway_PendingCode"/>
+    <bpmn:sequenceFlow id="Flow_Pending_9902" name="9902" sourceRef="Gateway_PendingCode" targetRef="EndEvent_9902"/>
+    <bpmn:sequenceFlow id="Flow_Pending_9918" name="9918" sourceRef="Gateway_PendingCode" targetRef="EndEvent_9918">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">MSG-GROUP-PARA.MSG-NR = 9918</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Tx_Runtime" sourceRef="BoundaryEvent_Tx_Runtime" targetRef="EndEvent_Runtime"/>
+    <bpmn:sequenceFlow id="Flow_Return_Camsg" sourceRef="Task_ReturnContractId" targetRef="Task_CamsgTranslate"/>
+    <bpmn:sequenceFlow id="Flow_Camsg_Rsp" sourceRef="Task_CamsgTranslate" targetRef="Gateway_RspCodeZero"/>
+    <bpmn:sequenceFlow id="Flow_RspZero_Yes" name="yes" sourceRef="Gateway_RspCodeZero" targetRef="EndEvent_ContractStored">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">P-RESPONSE.P-RSPCODE = '0'</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_RspZero_No" name="no" sourceRef="Gateway_RspCodeZero" targetRef="EndEvent_ErrorShown"/>
+  </bpmn:process>
+</bpmn:definitions>
