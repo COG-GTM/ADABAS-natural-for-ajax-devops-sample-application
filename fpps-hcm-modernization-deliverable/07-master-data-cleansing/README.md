@@ -6,7 +6,7 @@ Profiling, cleansing-rule, and reconciliation pattern for legacy master data bef
 |---|---|
 | **Capability** | Master-data cleansing and reconciliation |
 | **Why it matters to an SI implementing an HCM** | Dirty master data — orphaned keys, inconsistent name fields, missing supervisors, invalid organisation relationships — is the leading cause of failed loads and post-go-live defects. |
-| **Builds on** | 03, `../tests/harness/adabas_sim.py`, `../tests/harness/fixtures.py`, DDM field-usage evidence from 10 |
+| **Builds on** | 03, `../../tests/harness/adabas_sim.py`, `../../tests/harness/fixtures.py`, DDM field-usage evidence from 10 |
 | **Maturity** | Demonstrated for the pattern on synthetic data; Designed for FPPS field rules |
 
 ## Contents

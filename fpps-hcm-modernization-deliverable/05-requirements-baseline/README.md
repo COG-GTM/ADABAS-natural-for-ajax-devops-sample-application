@@ -6,7 +6,7 @@ A requirements baseline reconstructed from observed behaviour: functional, data,
 |---|---|
 | **Capability** | Requirements baseline |
 | **Why it matters to an SI implementing an HCM** | This is the artifact traditional requirements gathering produces slowly and expensively. Structured for direct use in HCM fit-gap, configuration workbooks, and acceptance testing. |
-| **Builds on** | 01, 02, 03, 04, 10; `../docs/*.md` |
+| **Builds on** | 01, 02, 03, 04, 10; `../../docs/*.md` |
 | **Maturity** | Demonstrated for the sample; the method is Designed for FPPS scale |
 
 ## Contents

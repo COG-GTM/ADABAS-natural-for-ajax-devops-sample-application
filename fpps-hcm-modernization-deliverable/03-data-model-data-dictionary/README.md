@@ -6,7 +6,7 @@ Master-data model and field-level dictionary derived from the four ADABAS DDMs, 
 |---|---|
 | **Capability** | Data model and data dictionary |
 | **Why it matters to an SI implementing an HCM** | HCM Data Loader mapping starts from a definition of master data: every attribute, its format, its descriptor role, whether it is used, and what it maps to. Unused and ambiguous fields are as important as used ones. |
-| **Builds on** | `../docs/data-dictionary.md`, `../tools/generate_data_dictionary.py`, `../SunnyIslands/Natural-Libraries/CRUISE16/DDMs/*.NSD`, `../tools/analyze_disposition.py` (field-usage matrix) |
+| **Builds on** | `../../docs/data-dictionary.md`, `../../tools/generate_data_dictionary.py`, `../../SunnyIslands/Natural-Libraries/CRUISE16/DDMs/*.NSD`, `../../tools/analyze_disposition.py` (field-usage matrix) |
 | **Maturity** | Demonstrated (dictionary is generated from the DDMs and drift-tested) |
 
 ## Contents

@@ -6,7 +6,7 @@ Process flows for listing, detail, booking, and customer maintenance expressed a
 |---|---|
 | **Capability** | Business-process flow (BPMN-oriented) |
 | **Why it matters to an SI implementing an HCM** | An HCM configuration team implements processes, not subprograms. BPMN-oriented flows let them map legacy behaviour to HCM transaction and approval flows and spot steps the HCM already provides. |
-| **Builds on** | `../docs/transaction-flows.md`, `RDCRUISP.NSP` event handlers, `CONEW-N.NSN` transaction boundaries |
+| **Builds on** | `../../docs/transaction-flows.md`, `RDCRUISP.NSP` event handlers, `CONEW-N.NSN` transaction boundaries |
 | **Maturity** | Demonstrated for the flows; Designed for the BPMN 2.0 XML export |
 
 ## Contents

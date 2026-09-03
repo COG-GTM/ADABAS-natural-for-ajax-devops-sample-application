@@ -6,7 +6,7 @@ Two-to-three page executive brief (Markdown source + branded PDF) for systems-in
 |---|---|
 | **Capability** | Executive value brief |
 | **Why it matters to an SI implementing an HCM** | Leadership sponsors the requirements-first approach only if the value, the scope split, the proof points, and the honest maturity of each capability are stated in two pages. |
-| **Builds on** | All capability directories 01–10; `../docs/concurrency-refactor.md` |
+| **Builds on** | All capability directories 01–10; `../../docs/concurrency-refactor.md` |
 | **Maturity** | Designed (content synthesised from Demonstrated and Designed artifacts in 01–10) |
 
 ## Contents

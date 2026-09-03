@@ -37,7 +37,7 @@ Present tense means "runs in this repository today". Anything else carries an ex
 
 - Sentence-case headings. Short paragraphs. Plain business language first, Natural/ADABAS specifics second.
 - Tables over prose for anything with more than three attributes.
-- Cross-link to sibling directories with relative links; cross-link to the repository with `../docs/...`, `../tests/...`, `../tools/...`.
+- Cross-link to sibling directories with relative links; cross-link to the repository root from a capability directory with `../../docs/...`, `../../tests/...`, `../../tools/...`, `../../SunnyIslands/...` (the hub `README.md` is one level higher and uses `../docs/...`).
 - Branding: deliverables intended for export (the executive brief, any PDF) use the Cognition wordmark and template; colours `#3969CA` (primary), `#21C19A` (accent), `#0294DE` (secondary); Inter / Inter Tight typography. Product names: Devin, DeepWiki, Devin Review, Devin Desktop.
 
 ## 6. Directory confinement for parallel authors

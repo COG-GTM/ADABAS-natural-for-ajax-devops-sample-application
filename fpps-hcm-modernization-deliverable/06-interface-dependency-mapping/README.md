@@ -6,7 +6,7 @@
 |---|---|
 | **Capability** | Interface and dependency mapping |
 | **Why it matters to an SI implementing an HCM** | Dependencies decide cut-over sequencing, interface redesign, and what breaks when a module is retired. Interfaces are where HCM programmes overrun. |
-| **Builds on** | `../docs/call-map.md`, `../SunnyIslands/deploy/natdeployDev.xml` / `natdeployTest.xml` / `natdeployProd.xml`, `../tools/analyze_disposition.py` (reference edges) |
+| **Builds on** | `../../docs/call-map.md`, `../../SunnyIslands/deploy/natdeployDev.xml` / `natdeployTest.xml` / `natdeployProd.xml`, `../../tools/analyze_disposition.py` (reference edges) |
 | **Maturity** | Demonstrated for the sample; FPPS interface inventory is Roadmap (requires agency inputs) |
 
 ## Contents

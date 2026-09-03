@@ -6,7 +6,7 @@ Plain-language business rules, each with an exact `.NSN` file and line citation,
 |---|---|
 | **Capability** | Business-rule extraction with source traceability |
 | **Why it matters to an SI implementing an HCM** | Rules are the eligibility and validation edits an HCM must reproduce exactly. Traceability lets the SI verify each rule against the source in minutes; confidence tells them where to spend SME time. |
-| **Builds on** | `../SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN` (codes 9800/9902/9904/9905/9918), `CAMSG-N.NSN`, `CUMOD-N.NSN`, `../tests/test_source_conformance.py`, `../docs/concurrency-refactor.md` |
+| **Builds on** | `../../SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN` (codes 9800/9902/9904/9905/9918), `CAMSG-N.NSN`, `CUMOD-N.NSN`, `../../tests/test_source_conformance.py`, `../../docs/concurrency-refactor.md` |
 | **Maturity** | Demonstrated (rules cite shipped source; conformance tests assert the message-code sets) |
 
 ## Contents

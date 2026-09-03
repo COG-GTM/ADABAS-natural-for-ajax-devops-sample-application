@@ -6,7 +6,7 @@ Evidence-backed ledger of everything in the legacy sources that should **not** b
 |---|---|
 | **Capability** | Migration disposition: dead, unreachable, and obsolete logic |
 | **Why it matters to an SI implementing an HCM** | Blindly preserving legacy logic is how programmes re-implement bugs and dead paths at HCM prices. A defensible disposition ledger shrinks scope and de-risks sign-off. |
-| **Builds on** | `../tools/analyze_disposition.py`, `../tests/test_disposition_analysis.py`, [`evidence/`](evidence/) (generated), Software AG Predict XRef verification concepts |
+| **Builds on** | `../../tools/analyze_disposition.py`, `../../tests/test_disposition_analysis.py`, [`evidence/`](evidence/) (generated), Software AG Predict XRef verification concepts |
 | **Maturity** | Demonstrated (evidence generated and drift-tested); SME confirmation columns are Roadmap by nature |
 
 ## Contents

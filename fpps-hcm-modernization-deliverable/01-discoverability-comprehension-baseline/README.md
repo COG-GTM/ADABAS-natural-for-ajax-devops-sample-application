@@ -6,7 +6,7 @@ Architecture and comprehension map of the estate: library structure, module inve
 |---|---|
 | **Capability** | Discoverability and comprehension baseline |
 | **Why it matters to an SI implementing an HCM** | Scoping, pricing, and configuration all start from knowing what exists, what calls what, and what touches which file. This is the baseline every later directory cites. |
-| **Builds on** | `../docs/module-inventory.md`, `../docs/call-map.md`, `../tools/analyze_disposition.py` (object inventory and reference edges) |
+| **Builds on** | `../../docs/module-inventory.md`, `../../docs/call-map.md`, `../../tools/analyze_disposition.py` (object inventory and reference edges) |
 | **Maturity** | Demonstrated (inventory and graph derive from the shipped sources) |
 
 ## Contents

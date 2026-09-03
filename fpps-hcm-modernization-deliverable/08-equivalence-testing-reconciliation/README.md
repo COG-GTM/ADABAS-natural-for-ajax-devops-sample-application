@@ -6,7 +6,7 @@ Harnesses that compare HCM outputs to legacy behaviour: clean batch versus broke
 |---|---|
 | **Capability** | Equivalence testing and penny-level reconciliation |
 | **Why it matters to an SI implementing an HCM** | Proof of correctness is the deliverable. The SI loads HCM output back into the harness and gets a signed reconciliation, not an assertion. |
-| **Builds on** | `../tests/harness/natural_model.py`, `../tests/harness/source_parser.py`, `../tests/harness/adabas_sim.py`, `../tests/test_conew_booking.py`, `../tests/test_concurrency.py` |
+| **Builds on** | `../../tests/harness/natural_model.py`, `../../tests/harness/source_parser.py`, `../../tests/harness/adabas_sim.py`, `../../tests/test_conew_booking.py`, `../../tests/test_concurrency.py` |
 | **Maturity** | Demonstrated (harness output is checked in and reproducible) |
 
 ## Contents

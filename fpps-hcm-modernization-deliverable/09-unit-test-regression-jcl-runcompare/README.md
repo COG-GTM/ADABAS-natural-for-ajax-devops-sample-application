@@ -6,7 +6,7 @@ Generated unit tests and regression suites for extracted rules, CI integration, 
 |---|---|
 | **Capability** | Unit-test, regression, and JCL run-compare generation |
 | **Why it matters to an SI implementing an HCM** | Regression coverage protects the pay run during and after cut-over and is the fastest way to demonstrate that a rule extracted in 02 still holds after HCM configuration. |
-| **Builds on** | `../tests/`, `../.github/workflows/regression-tests.yml`, `../.github/workflows/codeql-analysis.yml`, `../docs/testing-and-ci.md` |
+| **Builds on** | `../../tests/`, `../../.github/workflows/regression-tests.yml`, `../../.github/workflows/codeql-analysis.yml`, `../../docs/testing-and-ci.md` |
 | **Maturity** | Demonstrated for unit/regression on the sample; JCL run-compare is Designed (no FPPS JCL in this repository) |
 
 ## Contents
