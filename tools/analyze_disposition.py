@@ -53,8 +53,6 @@ DATA_AREA_TYPES = {"local data area", "global data area", "parameter data area"}
 # (.NSP) can also be started directly from a Natural session.
 UI_ROOT = "RDCRUISP"
 
-# Natural system variables / keywords that collide with DDM field names.
-FIELD_NAME_STOPLIST = {"LENGTH", "DATE", "TIME", "NAME", "ADDRESS", "PRICES"}
 
 _CALL_RE = re.compile(
     r"\b(CALLNAT|FETCH(?:\s+RETURN)?|INCLUDE|PERFORM)\s+(?:'([A-Z0-9#@$&\-]+)'"
@@ -68,16 +66,23 @@ _COMMENTED_STMT_RE = re.compile(
     r"[A-Z0-9#@.\-]+\s*:=)\b"
 )
 _MARKER_RE = re.compile(
-    r"TODO|exercise|not yet|nicht|Lorem ipsum|IGNORE\b|copyright",
+    r"TODO|exercise|not yet|noch nicht|Lorem ipsum|IGNORE\b|copyright",
     re.IGNORECASE,
 )
 _DATA_FIELD_RE = re.compile(
     r"^\s*([1-9])\s+([A-Z#][A-Z0-9#@$&\-]*)\s*(?P<fmt>\()?")
+_VIEW_OF_RE = re.compile(r"\bVIEW\s+OF\s+([A-Z0-9#@$&\-]+)")
 _UI_METHOD_RE = re.compile(r'method="([A-Za-z0-9_]+)"')
+_IDENT = r"[A-Z0-9#@$&\-]"
 
 
 def _objects():
+    """Inventory keyed by object name.  Natural resolves objects by name
+    through the steplib chain, so a name that exists in more than one library
+    is a shadowing candidate; those are returned separately instead of being
+    silently overwritten."""
     objs = {}
+    shadowed = []
     for path in sorted(LIB_ROOT.rglob("*")):
         otype = OBJECT_TYPES.get(path.suffix.upper())
         if not otype or not path.is_file():
@@ -85,6 +90,11 @@ def _objects():
         src = sp.read_source(path)
         rel = path.relative_to(REPO_ROOT).as_posix()
         library = path.relative_to(LIB_ROOT).parts[0]
+        if path.stem in objs:
+            shadowed.append({"object": path.stem, "type": otype,
+                             "library": library, "path": rel,
+                             "shadowed_by": objs[path.stem]["path"]})
+            continue
         objs[path.stem] = {
             "object": path.stem,
             "type": otype,
@@ -96,7 +106,7 @@ def _objects():
             ),
             "_src": src,
         }
-    return objs
+    return objs, shadowed
 
 
 def _references(objs):
@@ -204,34 +214,15 @@ def _executable_body(objs, types):
     )
 
 
-def _ddm_field_usage(objs):
-    body = _executable_body(objs, CODE_TYPES)
-    per_obj = {n: "\n".join(sp.strip_comments(o["_src"]))
-               for n, o in objs.items() if o["type"] in CODE_TYPES}
-    data_areas = {n: "\n".join(sp.strip_comments(o["_src"]))
-                  for n, o in objs.items() if o["type"] in DATA_AREA_TYPES}
-    rows = []
-    for file_name, ddm in sp.all_ddms().items():
-        for f in ddm.fields:
-            if f.field_type in ("G", "P", "M") and not f.fmt:
-                kind = "group/periodic header"
-            else:
-                kind = "field"
-            pat = re.compile(r"\b" + re.escape(f.name) + r"\b")
-            users = sorted(n for n, b in per_obj.items() if pat.search(b))
-            declared = sorted(n for n, b in data_areas.items() if pat.search(b))
-            rows.append({
-                "file": file_name, "field": f.name, "format": f.fmt,
-                "length": f.length, "kind": kind,
-                "referenced_by": users,
-                "declared_in_data_areas": declared,
-                "ambiguous": f.name in FIELD_NAME_STOPLIST,
-            })
-    return rows
-
-
 def _data_fields(src):
     """Yield (level, name, is_group) for every field declared inline."""
+    for level, name, is_group, _ in _data_fields_with_view(src):
+        yield level, name, is_group
+
+
+def _data_fields_with_view(src):
+    """Yield (level, name, is_group, view_of) for every inline declaration.
+    ``view_of`` is the DDM name for ``1 X VIEW OF DDM`` lines, else None."""
     in_define = False
     for raw in src.splitlines():
         st = raw.strip()
@@ -243,9 +234,189 @@ def _data_fields(src):
             in_define = False
         if not in_define:
             continue
-        m = _DATA_FIELD_RE.match(re.split(r"/\*", raw)[0])
+        code = re.split(r"/\*", raw)[0]
+        m = _DATA_FIELD_RE.match(code)
         if m and m.group(2) not in ("USING", "REDEFINE"):
-            yield int(m.group(1)), m.group(2), m.group("fmt") is None
+            v = _VIEW_OF_RE.search(code)
+            yield (int(m.group(1)), m.group(2), m.group("fmt") is None,
+                   v.group(1) if v else None)
+
+
+def _structures(src, owner):
+    """Parse a DEFINE DATA block into level-1 structures.
+
+    Returns a list of dicts: ``name`` (level-1 name), ``owner`` (object that
+    declares it), ``view_of`` (DDM name or None), ``fields`` — a list of
+    ``(name, level, is_group, qualifiers)`` where ``qualifiers`` is the set
+    of ancestor group names (including the level-1 name) that may legally
+    qualify a reference to the field.
+    """
+    structs = []
+    stack = []  # (level, name)
+    for level, name, is_group, view_of in _data_fields_with_view(src):
+        while stack and stack[-1][0] >= level:
+            stack.pop()
+        if level == 1:
+            structs.append({"name": name, "owner": owner, "view_of": view_of,
+                            "fields": []})
+        elif structs:
+            structs[-1]["fields"].append(
+                (name, level, is_group, {n for _, n in stack}))
+        stack.append((level, name))
+    return structs
+
+
+def _scopes(objs, refs):
+    """Visible level-1 structures per code object: inline declarations plus
+    every ``USING``-referenced data area (PDA / LDA / GDA)."""
+    declared = {n: _structures(o["_src"], n) for n, o in objs.items()
+                if o["type"] in CODE_TYPES | DATA_AREA_TYPES}
+    scopes = {}
+    for name, o in objs.items():
+        if o["type"] not in CODE_TYPES:
+            continue
+        visible = list(declared.get(name, []))
+        for r in refs:
+            if r["caller"] == name and r["statement"] == "USING":
+                visible += declared.get(r["callee"], [])
+        scopes[name] = visible
+    return scopes
+
+
+def _statement_lines(src):
+    """Executable lines outside DEFINE DATA and outside CALLNAT parameter
+    lists (a field passed as a CALLNAT operand is neither read nor assigned
+    by the caller in any way this analysis can attribute)."""
+    out = []
+    in_define = False
+    callnat_indent = None
+    operand_only = re.compile(
+        r"^\s*(?:" + _IDENT + r"+(?:\.[A-Z0-9#@$&\-]+)?(?:\([^)]*\))?\s*)+$")
+    for line in sp.strip_comments(src):
+        st = line.strip()
+        if st.startswith("DEFINE DATA"):
+            in_define = True
+        if in_define:
+            if st.startswith("END-DEFINE"):
+                in_define = False
+            continue
+        indent = len(line) - len(line.lstrip())
+        if callnat_indent is not None:
+            if indent > callnat_indent and operand_only.match(line):
+                continue  # continuation of the CALLNAT operand list
+            callnat_indent = None
+        if st.startswith("CALLNAT"):
+            callnat_indent = indent
+            continue
+        out.append(line)
+    return out
+
+
+# Keyword phrases whose words must not be mistaken for field references.
+_KEYWORD_PHRASE_RE = re.compile(r"\bMOVE\s+BY\s+(?:NAME|POSITION)\b")
+# ``READ/FIND/HISTOGRAM [(n)] <view> ... WITH|BY <descriptor>`` — the
+# descriptor is implicitly a field of <view>, so it needs no qualifier.
+_DB_ACCESS_RE = re.compile(
+    r"\b(?:READ|FIND|HISTOGRAM)(?:\s*\(\d+\))?\s+(?:ALL\s+|NUMBER\s+)?"
+    r"(?:\(\d+\)\s+)?(?:MULTI-FETCH\s+\S+\s+)?(?:RECORDS\s+IN\s+)?"
+    r"(?:FILE\s+)?(" + _IDENT + r"+)")
+
+
+def _occurrences(line, field):
+    """Yield (qualifier or None, start, end) for every token ``field`` in
+    ``line`` — skipping Natural system variables (``*FIELD``) and keyword
+    phrases such as ``MOVE BY NAME``."""
+    pat = re.compile(
+        r"(?<![A-Z0-9#@$&\-.*])(?:(?P<q>" + _IDENT + r"+)\.)?"
+        + re.escape(field) + r"(?!" + _IDENT + r")")
+    keyword_spans = [m.span() for m in _KEYWORD_PHRASE_RE.finditer(line)]
+    for m in pat.finditer(line):
+        if any(a <= m.start() and m.end() <= b for a, b in keyword_spans):
+            continue
+        yield m.group("q"), m.start(), m.end()
+
+
+def _implied_view(line):
+    m = _DB_ACCESS_RE.search(line)
+    return m.group(1) if m else None
+
+
+def _resolve(qualifier, field, scope, line=""):
+    """Structures in ``scope`` that a reference ``[qualifier.]field`` can
+    denote.  Qualified references resolve to structures where the qualifier
+    is an ancestor group; unqualified references resolve to every structure
+    declaring the field, except inside a database-access statement where the
+    accessed view wins.  Natural requires qualification when the candidate set
+    has more than one element, so >1 hit marks the reference ambiguous."""
+    hits = []
+    for s in scope:
+        for fname, _, _, quals in s["fields"]:
+            if fname != field:
+                continue
+            if qualifier is None or qualifier in quals:
+                hits.append(s)
+                break
+    if qualifier is None and len(hits) > 1:
+        view = _implied_view(line)
+        implied = [s for s in hits if s["view_of"] and s["name"] == view]
+        if implied:
+            return implied
+    return hits
+
+
+def _is_assignment(line, start, end):
+    before = line[:start]
+    after = line[end:]
+    return bool(
+        re.search(r"\b(TO|INTO|RESET)\s+(?:" + _IDENT + r"+\.)?$", before)
+        or re.match(r"\s*:=", after)
+    )
+
+
+def _ddm_field_usage(objs, refs):
+    """For every DDM field: which views expose it and which code objects
+    reference it *through one of those views*.  A textual match on a field
+    name that resolves to a PDA, LDA or GDA structure of the same name is not
+    credited as database usage."""
+    scopes = _scopes(objs, refs)
+    stmt_lines = {n: _statement_lines(o["_src"]) for n, o in objs.items()
+                  if o["type"] in CODE_TYPES}
+    rows = []
+    for file_name, ddm in sp.all_ddms().items():
+        for f in ddm.fields:
+            if f.field_type in ("G", "P", "M") and not f.fmt:
+                kind = "group/periodic header"
+            else:
+                kind = "field"
+            exposed = set()
+            users = set()
+            ambiguous_in = set()
+            for obj, scope in scopes.items():
+                views = [s for s in scope
+                         if s["view_of"] == file_name
+                         and any(fn == f.name for fn, *_ in s["fields"])]
+                for s in views:
+                    exposed.add(f"{s['owner']}.{s['name']}")
+                if not views:
+                    continue
+                for line in stmt_lines[obj]:
+                    for q, _, _ in _occurrences(line, f.name):
+                        hits = _resolve(q, f.name, scope, line)
+                        if not hits:
+                            continue
+                        via_view = [h for h in hits if h["view_of"] == file_name]
+                        if via_view and len(hits) == 1:
+                            users.add(obj)
+                        elif via_view:
+                            ambiguous_in.add(obj)
+            rows.append({
+                "file": file_name, "field": f.name, "format": f.fmt,
+                "length": f.length, "kind": kind,
+                "exposed_in_views": sorted(exposed),
+                "referenced_by": sorted(users),
+                "ambiguous_in": sorted(ambiguous_in),
+            })
+    return rows
 
 
 def _count_refs(name, code):
@@ -284,34 +455,46 @@ def _pda_field_population(objs, refs):
     """For every PDA field: is it ever assigned / read outside DEFINE DATA and
     CALLNAT parameter lists?  Catches contracts that are passed but never
     populated (declared-only interface fields)."""
-    code_lines = []
-    for o in objs.values():
-        if o["type"] in CODE_TYPES:
-            code_lines += sp.strip_comments(o["_src"])
-    stmt_lines = [l for l in code_lines
-                  if not re.match(r"^\s*(\d\s|CALLNAT|LOCAL|PARAMETER|USING|"
-                                  r"DEFINE DATA|END-DEFINE)", l)]
+    scopes = _scopes(objs, refs)
+    stmt_lines = {n: _statement_lines(o["_src"]) for n, o in objs.items()
+                  if o["type"] in CODE_TYPES}
     used_pdas = {r["callee"] for r in refs if r["statement"] == "USING"}
     rows = []
     for name, o in objs.items():
         if o["type"] != "parameter data area" or name not in used_pdas:
             continue
-        for level, field, is_group in _data_fields(o["_src"]):
-            if level < 2 or is_group:
-                continue
-            pat = r"(?<![A-Z0-9#@$&\-])" + re.escape(field) + r"(?![A-Z0-9#@$&\-])"
-            hits = [l for l in stmt_lines if re.search(pat, l)]
-            assigned = [l for l in hits if re.search(
-                r"(TO\s+[A-Z0-9#@$&\-.]*" + re.escape(field) + r"\b)|"
-                r"(INTO\s+[A-Z0-9#@$&\-.]*" + re.escape(field) + r"\b)|"
-                r"(\b[A-Z0-9#@$&\-.]*" + re.escape(field) + r"\s*:=)|"
-                r"(RESET\s+[A-Z0-9#@$&\-.]*" + re.escape(field) + r"\b)", l)]
-            rows.append({
-                "pda": name, "field": field,
-                "statement_references": len(hits),
-                "assignments": len(assigned),
-                "reads": len(hits) - len(assigned),
-            })
+        for s in _structures(o["_src"], name):
+            for field, level, is_group, _ in s["fields"]:
+                if is_group:
+                    continue
+                hits = assigned = ambiguous = 0
+                users = set()
+                for obj, scope in scopes.items():
+                    if not any(v["owner"] == name and v["name"] == s["name"]
+                               for v in scope):
+                        continue
+                    for line in stmt_lines[obj]:
+                        for q, start, end in _occurrences(line, field):
+                            res = _resolve(q, field, scope, line)
+                            mine = [h for h in res if h["owner"] == name
+                                    and h["name"] == s["name"]]
+                            if not mine:
+                                continue
+                            if len(res) > 1:
+                                ambiguous += 1
+                                continue
+                            hits += 1
+                            users.add(obj)
+                            if _is_assignment(line, start, end):
+                                assigned += 1
+                rows.append({
+                    "pda": name, "structure": s["name"], "field": field,
+                    "statement_references": hits,
+                    "assignments": assigned,
+                    "reads": hits - assigned,
+                    "ambiguous_references": ambiguous,
+                    "referenced_by": sorted(users),
+                })
     return rows
 
 
@@ -353,7 +536,7 @@ def _ui_events(objs):
 
 
 def analyze():
-    objs = _objects()
+    objs, shadowed = _objects()
     refs, dynamic = _references(objs)
     result = {
         "scope": "SunnyIslands/Natural-Libraries (static analysis; candidates only)",
@@ -361,11 +544,12 @@ def analyze():
             {k: v for k, v in o.items() if not k.startswith("_")}
             for o in objs.values()
         ],
+        "shadowed_objects": shadowed,
         "references": refs,
         "dynamic_invocations": dynamic,
         "reachability": _reachability(objs, refs),
         "message_codes": _message_codes(objs),
-        "ddm_field_usage": _ddm_field_usage(objs),
+        "ddm_field_usage": _ddm_field_usage(objs, refs),
         "unused_level1_variables": _unused_level1_vars(objs),
         "pda_field_population": _pda_field_population(objs, refs),
         "commented_out_statements": _commented_statements(objs),
@@ -380,7 +564,11 @@ def control_totals(result):
     mc = result["message_codes"]
     never_used_fields = [
         r for r in result["ddm_field_usage"]
-        if r["kind"] == "field" and not r["referenced_by"] and not r["ambiguous"]
+        if r["kind"] == "field" and not r["referenced_by"] and not r["ambiguous_in"]
+    ]
+    not_in_any_view = [
+        r for r in result["ddm_field_usage"]
+        if r["kind"] == "field" and not r["exposed_in_views"]
     ]
     unref_objects = [r["object"] for r in result["reachability"]
                      if r["status"] == "unreferenced in analyzed scope"]
@@ -394,6 +582,8 @@ def control_totals(result):
         "objects": len(result["inventory"]),
         "code_objects": sum(1 for o in result["inventory"]
                             if o["type"] in CODE_TYPES),
+        "shadowed_objects": sorted(
+            f"{r['library']}/{r['object']}" for r in result["shadowed_objects"]),
         "static_references": len(result["references"]),
         "dynamic_invocations": len(result["dynamic_invocations"]),
         "unreferenced_objects": sorted(unref_objects),
@@ -404,8 +594,9 @@ def control_totals(result):
         "message_codes_emitted_not_cataloged": len(mc["emitted_not_cataloged"]),
         "commented_out_message_emits": len(mc["commented_out_emits"]),
         "ddm_fields_never_referenced": len(never_used_fields),
-        "ddm_fields_ambiguous_name": sum(
-            1 for r in result["ddm_field_usage"] if r["ambiguous"]),
+        "ddm_fields_not_in_any_view": len(not_in_any_view),
+        "ddm_fields_ambiguous_reference": sum(
+            1 for r in result["ddm_field_usage"] if r["ambiguous_in"]),
         "unused_level1_variables": len(result["unused_level1_variables"]),
         "pda_fields_never_assigned": sorted(never_populated),
         "commented_out_statements": len(result["commented_out_statements"]),
@@ -444,6 +635,8 @@ def render_markdown(result):
     L += _md_table(["Measure", "Value"], [
         ("Natural objects analyzed", ct["objects"]),
         ("Code objects (subprogram / program / copycode)", ct["code_objects"]),
+        ("Object names present in more than one library (shadowing)",
+         ", ".join(ct["shadowed_objects"]) or "none"),
         ("Static literal references (CALLNAT/FETCH/INCLUDE/USING)", ct["static_references"]),
         ("Dynamic invocations (unresolvable statically)", ct["dynamic_invocations"]),
         ("Objects unreferenced in analyzed scope", ", ".join(ct["unreferenced_objects"]) or "none"),
@@ -453,8 +646,9 @@ def render_markdown(result):
         ("Cataloged but never emitted", ct["message_codes_cataloged_never_emitted"]),
         ("Emitted but not cataloged", ct["message_codes_emitted_not_cataloged"]),
         ("Commented-out message emits", ct["commented_out_message_emits"]),
-        ("DDM fields never referenced by executable code", ct["ddm_fields_never_referenced"]),
-        ("DDM fields with keyword-ambiguous names (excluded)", ct["ddm_fields_ambiguous_name"]),
+        ("DDM fields never referenced through a view by executable code", ct["ddm_fields_never_referenced"]),
+        ("DDM fields not exposed in any view (subset of the above)", ct["ddm_fields_not_in_any_view"]),
+        ("DDM fields with an ambiguous unqualified reference (excluded)", ct["ddm_fields_ambiguous_reference"]),
         ("Level-1 variables declared but unused", ct["unused_level1_variables"]),
         ("PDA fields never assigned anywhere", ", ".join(ct["pda_fields_never_assigned"]) or "none"),
         ("Commented-out executable statements", ct["commented_out_statements"]),
@@ -493,13 +687,17 @@ def render_markdown(result):
     L += _md_table(["Object", "Line", "Code"], [
         (f"`{r['object']}`", r["line"], r["code"]) for r in mc["commented_out_emits"]
     ])
-    L += ["", "## DDM field usage (executable code only)", ""]
-    L += _md_table(["File", "Field", "Fmt", "Len", "Referenced by (code)",
-                    "Declared in data areas", "Note"], [
+    L += ["", "## DDM field usage (executable code, resolved through views)", "",
+          "A code object is credited only when a reference resolves to a view",
+          "of the DDM that is visible in that object's `DEFINE DATA` scope;",
+          "same-named PDA/LDA/GDA fields are not counted as database usage.", ""]
+    L += _md_table(["File", "Field", "Fmt", "Len", "Exposed in views",
+                    "Referenced by (code)", "Note"], [
         (r["file"], f"`{r['field']}`", r["format"], r["length"],
+         ", ".join(f"`{u}`" for u in r["exposed_in_views"]) or "**none**",
          ", ".join(f"`{u}`" for u in r["referenced_by"]) or "**none**",
-         ", ".join(f"`{u}`" for u in r["declared_in_data_areas"]) or "—",
-         "keyword-ambiguous name; excluded from totals" if r["ambiguous"]
+         ("ambiguous unqualified reference in " + ", ".join(f"`{u}`" for u in r["ambiguous_in"])
+          + "; excluded from totals") if r["ambiguous_in"]
          else ("group header" if r["kind"] != "field" else ""))
         for r in result["ddm_field_usage"]
     ])
@@ -513,9 +711,12 @@ def render_markdown(result):
           "Zero assignments means the field is declared in a service contract",
           "but never populated by any caller or service (heuristic: MOVE/",
           "COMPRESS INTO/:=/RESET targets count as assignments).", ""]
-    L += _md_table(["PDA", "Field", "Statement refs", "Assignments", "Reads"], [
-        (f"`{r['pda']}`", f"`{r['field']}`", r["statement_references"],
-         r["assignments"], r["reads"]) for r in result["pda_field_population"]
+    L += _md_table(["PDA", "Structure", "Field", "Statement refs", "Assignments",
+                    "Reads", "Referenced by"], [
+        (f"`{r['pda']}`", f"`{r['structure']}`", f"`{r['field']}`",
+         r["statement_references"], r["assignments"], r["reads"],
+         ", ".join(f"`{u}`" for u in r["referenced_by"]) or "—")
+        for r in result["pda_field_population"]
     ])
     L += ["", "## Commented-out executable statements", ""]
     L += _md_table(["Object", "Line", "Text"], [

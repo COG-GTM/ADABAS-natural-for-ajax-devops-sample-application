@@ -4,14 +4,199 @@ The migration-disposition evidence under
 fpps-hcm-modernization-deliverable/10-migration-disposition-dead-code/evidence/
 is generated from the Natural sources.  These tests (a) pin the control
 totals so a change in the sources or the analyzer is a deliberate, reviewed
-event, (b) assert set equality in both directions for the key findings, and
-(c) assert the committed evidence files match the generator byte-for-byte.
+event, (b) assert set equality in both directions for the key findings,
+(c) assert the committed evidence files match the generator byte-for-byte,
+and (d) exercise the analyzer's symbol resolution, dynamic-call detection and
+marker classification on small synthetic Natural fixtures so the snapshot
+numbers are backed by behavioural checks.
 """
 
 import json
+import textwrap
 import unittest
 
 from tools import analyze_disposition as ad
+
+
+def _obj(name, otype, src):
+    return {"object": name, "type": otype, "library": "FIX",
+            "path": f"FIX/{name}", "lines": 0, "executable_lines": 0,
+            "_src": textwrap.dedent(src)}
+
+
+PDA_SRC = """\
+    DEFINE DATA PARAMETER
+    1 P-CUSTOMER-DATA
+      2 PERSON-ID (N8)
+      2 NAME
+        3 SURNAME (A20)
+        3 FIRST-NAME-1 (U40)
+      2 P-NOTE (A10)
+    END-DEFINE
+"""
+
+LDA_SRC = """\
+    DEFINE DATA LOCAL
+    1 NCCUSTOMER VIEW OF NCCUSTOMER
+      2 PERSON-ID (N8)
+      2 NAME
+        3 SURNAME (A20)
+        3 FIRST-NAME-OLD (A20)
+    * 2 FIRST-NAME-1 (U40)
+    1 #WORK (A10)
+    END-DEFINE
+"""
+
+SVC_SRC = """\
+    DEFINE DATA
+    PARAMETER USING FIX-PDA
+    LOCAL USING FIX-LDA
+    END-DEFINE
+    FIND (1) NCCUSTOMER WITH PERSON-ID = P-CUSTOMER-DATA.PERSON-ID
+      MOVE NCCUSTOMER.SURNAME TO P-CUSTOMER-DATA.SURNAME
+      MOVE FIRST-NAME-OLD TO NAME.FIRST-NAME-1
+      IF P-NOTE = 'X' THEN IGNORE END-IF
+    END-FIND
+    END
+"""
+
+
+class SymbolResolutionFixtures(unittest.TestCase):
+    """Same-named fields in a DDM view and a PDA must be attributed to the
+    structure that actually owns the reference."""
+
+    def setUp(self):
+        self.objs = {
+            "FIX-PDA": _obj("FIX-PDA", "parameter data area", PDA_SRC),
+            "FIX-LDA": _obj("FIX-LDA", "local data area", LDA_SRC),
+            "FIX-SVC": _obj("FIX-SVC", "subprogram", SVC_SRC),
+        }
+        self.refs, self.dynamic = ad._references(self.objs)
+        self.scope = ad._scopes(self.objs, self.refs)["FIX-SVC"]
+
+    def test_structures_carry_view_and_qualifiers(self):
+        lda = ad._structures(self.objs["FIX-LDA"]["_src"], "FIX-LDA")
+        self.assertEqual([s["name"] for s in lda], ["NCCUSTOMER", "#WORK"])
+        self.assertEqual(lda[0]["view_of"], "NCCUSTOMER")
+        self.assertIsNone(lda[1]["view_of"])
+        fields = {f[0]: f[3] for f in lda[0]["fields"]}
+        self.assertEqual(fields["FIRST-NAME-OLD"], {"NCCUSTOMER", "NAME"})
+        self.assertNotIn("FIRST-NAME-1", fields)  # commented-out declaration
+
+    def test_scope_includes_using_data_areas(self):
+        self.assertEqual(
+            {(s["owner"], s["name"]) for s in self.scope},
+            {("FIX-PDA", "P-CUSTOMER-DATA"), ("FIX-LDA", "NCCUSTOMER"),
+             ("FIX-LDA", "#WORK")})
+
+    def test_qualified_reference_resolves_to_owner(self):
+        pda_hit = ad._resolve("P-CUSTOMER-DATA", "SURNAME", self.scope)
+        self.assertEqual([(s["owner"], s["name"]) for s in pda_hit],
+                         [("FIX-PDA", "P-CUSTOMER-DATA")])
+        view_hit = ad._resolve("NCCUSTOMER", "SURNAME", self.scope)
+        self.assertEqual([s["view_of"] for s in view_hit], ["NCCUSTOMER"])
+        # a group qualifier that exists in both structures is ambiguous
+        self.assertEqual(len(ad._resolve("NAME", "SURNAME", self.scope)), 2)
+
+    def test_unqualified_reference_unique_owner_or_ambiguous(self):
+        self.assertEqual(
+            [s["owner"] for s in ad._resolve(None, "FIRST-NAME-OLD", self.scope)],
+            ["FIX-LDA"])
+        self.assertEqual(len(ad._resolve(None, "PERSON-ID", self.scope)), 2)
+        # ...unless the line is a database access on the view
+        line = "FIND (1) NCCUSTOMER WITH PERSON-ID = P-CUSTOMER-DATA.PERSON-ID"
+        self.assertEqual(
+            [s["view_of"] for s in ad._resolve(None, "PERSON-ID", self.scope, line)],
+            ["NCCUSTOMER"])
+
+    def test_occurrences_skip_system_variables_and_keyword_phrases(self):
+        self.assertEqual(list(ad._occurrences("MOVE *LENGTH(#A) TO #B", "LENGTH")), [])
+        self.assertEqual(list(ad._occurrences("MOVE BY NAME A TO B", "NAME")), [])
+        occ = list(ad._occurrences("MOVE X.NAME TO NAME", "NAME"))
+        self.assertEqual([q for q, _, _ in occ], ["X", None])
+
+    def test_ddm_usage_not_credited_via_pda_field(self):
+        ddm_fields = {
+            "NCCUSTOMER": type("D", (), {"fields": [
+                type("F", (), {"name": n, "field_type": "", "fmt": "A",
+                               "length": 20})()
+                for n in ("PERSON-ID", "SURNAME", "FIRST-NAME-OLD", "FIRST-NAME-1")
+            ]})(),
+        }
+        real_all_ddms = ad.sp.all_ddms
+        ad.sp.all_ddms = lambda: ddm_fields
+        try:
+            rows = {r["field"]: r for r in ad._ddm_field_usage(self.objs, self.refs)}
+        finally:
+            ad.sp.all_ddms = real_all_ddms
+        self.assertEqual(rows["SURNAME"]["referenced_by"], ["FIX-SVC"])
+        self.assertEqual(rows["FIRST-NAME-OLD"]["referenced_by"], ["FIX-SVC"])
+        self.assertEqual(rows["PERSON-ID"]["referenced_by"], ["FIX-SVC"])
+        self.assertEqual(rows["PERSON-ID"]["ambiguous_in"], [])
+        # FIRST-NAME-1 is written in the PDA, but the view does not expose it
+        self.assertEqual(rows["FIRST-NAME-1"]["referenced_by"], [])
+        self.assertEqual(rows["FIRST-NAME-1"]["exposed_in_views"], [])
+        self.assertEqual(rows["SURNAME"]["exposed_in_views"], ["FIX-LDA.NCCUSTOMER"])
+
+    def test_pda_population_attributes_assignments_to_pda_only(self):
+        rows = {r["field"]: r for r in ad._pda_field_population(self.objs, self.refs)}
+        self.assertEqual(rows["SURNAME"]["assignments"], 1)
+        self.assertEqual(rows["SURNAME"]["reads"], 0)
+        self.assertEqual(rows["FIRST-NAME-1"]["assignments"], 1)
+        self.assertEqual(rows["PERSON-ID"]["reads"], 1)
+        self.assertEqual(rows["PERSON-ID"]["assignments"], 0)
+        self.assertEqual(rows["P-NOTE"]["reads"], 1)
+        self.assertEqual(rows["SURNAME"]["referenced_by"], ["FIX-SVC"])
+
+
+class ReferenceAndMarkerFixtures(unittest.TestCase):
+    def test_dynamic_call_reported_separately(self):
+        objs = {"DYN": _obj("DYN", "program", """\
+            DEFINE DATA LOCAL
+            1 #TARGET (A8)
+            END-DEFINE
+            MOVE 'CUGET-N' TO #TARGET
+            CALLNAT #TARGET P-COM
+            CALLNAT 'CAMSG-N' MSG
+            FETCH RETURN "RDCRINIP"
+            END
+        """)}
+        refs, dynamic = ad._references(objs)
+        self.assertEqual([(r["statement"], r["callee"]) for r in refs],
+                         [("CALLNAT", "CAMSG-N"), ("FETCH", "RDCRINIP")])
+        self.assertEqual([(d["statement"], d["operand"]) for d in dynamic],
+                         [("CALLNAT", "#TARGET")])
+
+    def test_statement_lines_exclude_define_data_and_callnat_operands(self):
+        src = textwrap.dedent("""\
+            DEFINE DATA LOCAL
+            1 P-A (A1)
+            END-DEFINE
+            CALLNAT 'X'
+              P-A
+              P-B
+            MOVE P-A TO P-B
+            END
+        """)
+        self.assertEqual([l.strip() for l in ad._statement_lines(src)],
+                         ["MOVE P-A TO P-B", "END"])
+
+    def test_markers_ignore_ordinary_german_text(self):
+        objs = {"MSG": _obj("MSG", "subprogram", """\
+            VALUE 9902 COMPRESS 'Reise nicht mehr verfügbar' INTO T
+            VALUE 9999 COMPRESS 'Funktion noch nicht implementiert' INTO T
+            * TODO remove the exercise stub
+            MOVE 'not yet supported' TO T
+        """)}
+        lines = [m["line"] for m in ad._markers(objs)]
+        self.assertEqual(lines, [2, 3, 4])
+
+
+class ObjectInventory(unittest.TestCase):
+    def test_same_name_in_two_libraries_is_reported_not_overwritten(self):
+        objs, shadowed = ad._objects()
+        self.assertEqual(shadowed, [])
+        self.assertEqual(len(objs), 31)
 
 
 class DispositionControlTotals(unittest.TestCase):
@@ -74,14 +259,24 @@ class DispositionControlTotals(unittest.TestCase):
         })
 
     def test_ddm_field_usage_totals(self):
-        self.assertEqual(self.ct["ddm_fields_never_referenced"], 21)
-        self.assertEqual(self.ct["ddm_fields_ambiguous_name"], 4)
-        never = {(r["file"], r["field"]) for r in self.result["ddm_field_usage"]
-                 if r["kind"] == "field" and not r["referenced_by"]
-                 and not r["ambiguous"]}
+        self.assertEqual(self.ct["ddm_fields_never_referenced"], 23)
+        self.assertEqual(self.ct["ddm_fields_not_in_any_view"], 17)
+        self.assertEqual(self.ct["ddm_fields_ambiguous_reference"], 0)
+        self.assertEqual(self.ct["shadowed_objects"], [])
+        rows = {(r["file"], r["field"]): r for r in self.result["ddm_field_usage"]}
+        never = {k for k, r in rows.items()
+                 if r["kind"] == "field" and not r["referenced_by"]}
         self.assertIn(("NCCUSTOMER", "FIRST-NAME-2"), never)
         self.assertIn(("NCCONTRACT", "DATE-CANCELLATION"), never)
         self.assertNotIn(("NCCRUISE", "CRUISE-STATUS"), never)
+        # the adapter writes P-CUSTOMER-DATA.FIRST-NAME-1 (PDA) but no view
+        # exposes NCCUSTOMER.FIRST-NAME-1 — it must not count as DB usage
+        self.assertIn(("NCCUSTOMER", "FIRST-NAME-1"), never)
+        self.assertEqual(rows[("NCCUSTOMER", "FIRST-NAME-1")]["exposed_in_views"], [])
+        # *LENGTH system variable is not a reference to NCYACHT.LENGTH
+        self.assertIn(("NCYACHT", "LENGTH"), never)
+        self.assertEqual(rows[("NCCUSTOMER", "PERSON-ID")]["referenced_by"],
+                         ["CONEW-N", "CUGET-N", "CUMOD-N", "CUNEW-N"])
 
     def test_unused_variables_and_comments(self):
         self.assertEqual(self.ct["unused_level1_variables"], 15)
