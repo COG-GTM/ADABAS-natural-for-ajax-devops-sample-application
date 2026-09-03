@@ -1412,6 +1412,300 @@
     }
   ],
   "message_codes": {
+    "primary": "CRUISE16/CAMSG-N",
+    "catalogs": [
+      {
+        "key": "CRUISE16/CAMSG-N",
+        "label": "CAMSG-N",
+        "library": "CRUISE16",
+        "path": "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CAMSG-N.NSN",
+        "catalog": [
+          9800,
+          9801,
+          9803,
+          9804,
+          9805,
+          9806,
+          9807,
+          9855,
+          9856,
+          9857,
+          9901,
+          9902,
+          9903,
+          9904,
+          9905,
+          9911,
+          9912,
+          9913,
+          9914,
+          9915,
+          9916,
+          9917,
+          9918,
+          9919,
+          9921,
+          9922,
+          9923,
+          9924,
+          9934,
+          9935,
+          9999
+        ],
+        "texts": {
+          "9800": [
+            "Reisebuchung erfolgreich",
+            "Travel Booking successful"
+          ],
+          "9801": [
+            "Reisebuchung erfolgreich ge\u00e4ndert",
+            "Travel Booking successfully modified"
+          ],
+          "9803": [
+            "Reisebuchung erfolgreich angezeigt",
+            "Travel Booking successfully shown"
+          ],
+          "9804": [
+            "Reisebuchung erfolgreich gel\u00f6scht",
+            "Travel Booking successfully purged"
+          ],
+          "9805": [
+            "Kundenliste angezeigt",
+            "Customer List shown"
+          ],
+          "9806": [
+            "Buchungsliste angezeigt",
+            "Booking List shown"
+          ],
+          "9807": [
+            "Reiseliste angezeigt",
+            "List of Cruises shown"
+          ],
+          "9855": [
+            "keine Kundendaten gefunden",
+            "no Customer Data found"
+          ],
+          "9856": [
+            "keine Buchungsdaten gefunden",
+            "no Booking Data found"
+          ],
+          "9857": [
+            "keine Reisedaten gefunden",
+            "no Cruise Data found"
+          ],
+          "9901": [
+            "Eingabe Anzahl Reisewochen fehlt",
+            "Week Count missing"
+          ],
+          "9902": [
+            "Reise nicht mehr verf\u00fcgbar",
+            "Cruise no longer available"
+          ],
+          "9903": [
+            "Eingabe Buchungsdatum fehlt",
+            "Date of Booking missing"
+          ],
+          "9904": [
+            "Eingabe Kunden-Nummer fehlt",
+            "Customer Id missing"
+          ],
+          "9905": [
+            "Eingabe Reise-Nummer fehlt",
+            "Cruise Id missing"
+          ],
+          "9911": [
+            "Jahr f\u00fcr Buchung ung\u00fcltig (2015-2020)",
+            "Year of Booking invalid (2015-2020)"
+          ],
+          "9912": [
+            "ung\u00fcltiges Datumsformat",
+            "invalid Date Format"
+          ],
+          "9913": [
+            "Jahr f\u00fcr Reservierung ung\u00fcltig (2015-2020)",
+            "Year of Reservation invalid (2015-2020)"
+          ],
+          "9914": [
+            "Format f\u00fcr Reservierungsdatum ung\u00fcltig",
+            "Format Date of Reservation invalid"
+          ],
+          "9915": [
+            "Nur 1-3 Reise-Wochen m\u00f6glich",
+            "only 1-3 Weeks possible"
+          ],
+          "9916": [
+            "Reise-Nummer nicht gefunden",
+            "Cruise Id not found"
+          ],
+          "9917": [
+            "falsches Format f\u00fcr Reisenummer",
+            "Format of Cruise Id invalid"
+          ],
+          "9918": [
+            "Kunden-Nummer nicht gefunden",
+            "Customer Id not found"
+          ],
+          "9919": [
+            "falsche Format f\u00fcr Kunden-Nummer",
+            "wrong Format for Customer Id"
+          ],
+          "9921": [
+            "Eingabe Buchungsnummer fehlt",
+            "Booking Id missing"
+          ],
+          "9922": [
+            "Buchungsnummer nicht gefunden oder falsches Format",
+            "Bookig Id not found or wrong format"
+          ],
+          "9923": [
+            "Eingabe Kundennummer fehlt",
+            "Customer Id missing"
+          ],
+          "9924": [
+            "Kundennummer nicht gefunden",
+            "Customer Id not found"
+          ],
+          "9934": [
+            "Kunde parallel ge\u00e4ndert",
+            "Customer changed from another user"
+          ],
+          "9935": [
+            "keine Daten zum Update gefunden",
+            "no valid data found for update"
+          ],
+          "9999": [
+            "Funktion noch nicht implementiert",
+            "Function not yet supported"
+          ]
+        },
+        "emitters": {
+          "CONEW-N": "current library",
+          "CRGET-N": "current library",
+          "CRLIST-N": "current library",
+          "CUGET-N": "current library",
+          "CUMOD-N": "current library",
+          "CUNEW-N": "current library"
+        },
+        "commented_out_emits": [
+          {
+            "object": "CONEW-N",
+            "line": 164,
+            "code": 9800
+          },
+          {
+            "object": "CONEW-N",
+            "line": 170,
+            "code": 9915
+          },
+          {
+            "object": "CONEW-N",
+            "line": 174,
+            "code": 9919
+          },
+          {
+            "object": "CONEW-N",
+            "line": 181,
+            "code": 9917
+          },
+          {
+            "object": "CONEW-N",
+            "line": 186,
+            "code": 9916
+          },
+          {
+            "object": "CONEW-N",
+            "line": 194,
+            "code": 9914
+          },
+          {
+            "object": "CONEW-N",
+            "line": 199,
+            "code": 9913
+          },
+          {
+            "object": "CONEW-N",
+            "line": 206,
+            "code": 9912
+          },
+          {
+            "object": "CONEW-N",
+            "line": 211,
+            "code": 9911
+          },
+          {
+            "object": "CRGET-N",
+            "line": 93,
+            "code": 9915
+          }
+        ],
+        "emitted": {
+          "9800": [
+            "CONEW-N"
+          ],
+          "9807": [
+            "CRLIST-N"
+          ],
+          "9857": [
+            "CRLIST-N"
+          ],
+          "9902": [
+            "CONEW-N"
+          ],
+          "9904": [
+            "CONEW-N"
+          ],
+          "9905": [
+            "CONEW-N"
+          ],
+          "9918": [
+            "CONEW-N"
+          ],
+          "9923": [
+            "CUGET-N"
+          ],
+          "9924": [
+            "CUGET-N",
+            "CUMOD-N"
+          ],
+          "9934": [
+            "CRGET-N",
+            "CUMOD-N"
+          ],
+          "9999": [
+            "CONEW-N",
+            "CRLIST-N",
+            "CUGET-N",
+            "CUMOD-N",
+            "CUNEW-N"
+          ]
+        },
+        "cataloged_never_emitted": [
+          9801,
+          9803,
+          9804,
+          9805,
+          9806,
+          9855,
+          9856,
+          9901,
+          9903,
+          9911,
+          9912,
+          9913,
+          9914,
+          9915,
+          9916,
+          9917,
+          9919,
+          9921,
+          9922,
+          9935
+        ],
+        "emitted_not_cataloged": []
+      }
+    ],
+    "emitters_without_catalog": [],
+    "ambiguous_emitters": [],
     "catalog": [
       9800,
       9801,
@@ -4066,6 +4360,11 @@
       "DELETECU"
     ],
     "definitions_not_reached_by_name_resolution": [],
+    "message_catalogs": [
+      "CAMSG-N"
+    ],
+    "message_emitters_without_catalog": [],
+    "message_emitters_ambiguous_catalog": [],
     "message_codes_cataloged": 31,
     "message_codes_emitted": 11,
     "message_codes_cataloged_never_emitted": 20,

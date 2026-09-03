@@ -441,12 +441,18 @@ SHADOW_OBJS = {
     "UI/RDCRUISP": _lib_obj("UI", "RDCRUISP", "program", """\
         DEFINE DATA LOCAL USING SHAREPDA
         END-DEFINE
+        MOVE 9800 TO MSG-GROUP-PARA.MSG-NR
         CALLNAT 'CAMSG-N' #A
         CALLNAT 'SVC-N' #A
         END
     """),
     "UI/CAMSG-N": _lib_obj("UI", "CAMSG-N", "subprogram", """\
         DEFINE DATA PARAMETER USING SHAREPDA END-DEFINE
+        DECIDE ON FIRST VALUE OF MSG-GROUP-PARA.MSG-NR
+          VALUE 9800 COMPRESS 'UI ok' INTO T
+          VALUE 9801 COMPRESS 'UI only, never emitted' INTO T
+          NONE IGNORE
+        END-DECIDE
         END
     """),
     "UI/SHAREPDA": _lib_obj("UI", "SHAREPDA", "parameter data area", """\
@@ -457,10 +463,19 @@ SHADOW_OBJS = {
     """),
     "STEP/CAMSG-N": _lib_obj("STEP", "CAMSG-N", "subprogram", """\
         DEFINE DATA PARAMETER USING SHAREPDA END-DEFINE
+        DECIDE ON FIRST VALUE OF MSG-GROUP-PARA.MSG-NR
+          VALUE 9800 COMPRESS 'STEP ok' INTO T
+          VALUE 9904 COMPRESS 'STEP invalid customer' INTO T
+          VALUE 9905 COMPRESS 'STEP only, never emitted' INTO T
+          NONE IGNORE
+        END-DECIDE
         END
     """),
     "STEP/SVC-N": _lib_obj("STEP", "SVC-N", "subprogram", """\
         DEFINE DATA PARAMETER USING SHAREPDA END-DEFINE
+        MOVE 9904 TO MSG-GROUP-PARA.MSG-NR
+        MOVE 9999 TO MSG-GROUP-PARA.MSG-NR
+        * MOVE 9905 TO MSG-GROUP-PARA.MSG-NR
         CALLNAT 'CAMSG-N' #A
         CALLNAT 'ORPHAN-N' #A
         END
@@ -578,6 +593,100 @@ class ObjectInventory(unittest.TestCase):
         self.assertEqual(r["resolved"], ["STEP/CAMSG-N", "UI/CAMSG-N"])
         self.assertEqual(r["resolution"], "ambiguous (steplib order unknown)")
 
+    def test_message_reconciliation_groups_emitters_per_resolved_catalog(self):
+        with mock.patch.object(ad, "UI_LIBRARY", "UI"):
+            mc = ad._message_codes(SHADOW_OBJS, ["STEP"])
+        self.assertEqual(mc["primary"], "UI/CAMSG-N")
+        by = {c["key"]: c for c in mc["catalogs"]}
+        self.assertEqual(set(by), {"FAR/CAMSG-N", "STEP/CAMSG-N", "UI/CAMSG-N"})
+        # RDCRUISP (UI) reaches UI/CAMSG-N: 9800 emitted there, 9801 never
+        ui = by["UI/CAMSG-N"]
+        self.assertEqual(ui["catalog"], [9800, 9801])
+        self.assertEqual(ui["emitted"], {"9800": ["RDCRUISP"]})
+        self.assertEqual(ui["cataloged_never_emitted"], [9801])
+        self.assertEqual(ui["emitted_not_cataloged"], [])
+        self.assertEqual(ui["emitters"], {"RDCRUISP": "current library"})
+        self.assertEqual(ui["commented_out_emits"], [])
+        # SVC-N (STEP) reaches STEP/CAMSG-N, never the UI copy: 9904 is
+        # cataloged there, 9999 is not, 9905 is only a commented-out emit
+        step = by["STEP/CAMSG-N"]
+        self.assertEqual(step["catalog"], [9800, 9904, 9905])
+        self.assertEqual(step["emitted"], {"9904": ["SVC-N"], "9999": ["SVC-N"]})
+        self.assertEqual(step["cataloged_never_emitted"], [9800, 9905])
+        self.assertEqual(step["emitted_not_cataloged"], [9999])
+        self.assertEqual(step["emitters"], {"SVC-N": "current library"})
+        self.assertEqual(step["commented_out_emits"],
+                         [{"object": "SVC-N", "line": 4, "code": 9905}])
+        # the shadowed FAR copy is reached by nobody
+        self.assertEqual(by["FAR/CAMSG-N"]["emitters"], {})
+        self.assertEqual(by["FAR/CAMSG-N"]["emitted"], {})
+        self.assertEqual(mc["emitters_without_catalog"], [])
+        self.assertEqual(mc["ambiguous_emitters"], [])
+        # top-level view == the primary (UI-resolved) catalog, not a pool
+        for k in ("catalog", "emitted", "cataloged_never_emitted",
+                  "emitted_not_cataloged", "commented_out_emits", "texts"):
+            self.assertEqual(mc[k], ui[k], k)
+        self.assertEqual(ui["texts"]["9800"], ["UI ok"])
+        self.assertEqual(step["texts"]["9800"], ["STEP ok"])
+
+    def test_message_reconciliation_with_unknown_steplib_order_is_ambiguous(self):
+        objs = {k: v for k, v in SHADOW_OBJS.items()
+                if not k.startswith(("FAR/", "LOST/"))}
+        objs["OTHER/EMIT-N"] = _lib_obj("OTHER", "EMIT-N", "subprogram", """\
+            MOVE 9904 TO MSG-GROUP-PARA.MSG-NR
+            CALLNAT 'CAMSG-N' #A
+            END
+        """)
+        with mock.patch.object(ad, "UI_LIBRARY", "UI"):
+            mc = ad._message_codes(objs, None)
+        self.assertEqual(mc["ambiguous_emitters"], [
+            {"object": "EMIT-N", "codes": [9904],
+             "catalogs": ["STEP/CAMSG-N", "UI/CAMSG-N"],
+             "resolution": "ambiguous (steplib order unknown)"}])
+        by = {c["key"]: c for c in mc["catalogs"]}
+        # the ambiguous emission is visible under both candidate catalogs
+        self.assertEqual(by["UI/CAMSG-N"]["emitted_not_cataloged"], [9904])
+        self.assertEqual(by["STEP/CAMSG-N"]["emitted"]["9904"], ["EMIT-N", "SVC-N"])
+        self.assertEqual(by["UI/CAMSG-N"]["emitters"]["EMIT-N"],
+                         "ambiguous (steplib order unknown)")
+        self.assertEqual(mc["primary"], "UI/CAMSG-N")
+
+    def test_message_reconciliation_emitter_outside_every_catalog_chain(self):
+        objs = dict(SHADOW_OBJS)
+        objs["LOST/LOST-N"] = _lib_obj("LOST", "LOST-N", "subprogram", """\
+            MOVE 9924 TO MSG-GROUP-PARA.MSG-NR
+            * MOVE 9925 TO MSG-GROUP-PARA.MSG-NR
+            CALLNAT 'CAMSG-N' #A
+            END
+        """)
+        # steplib chain names a library with no CAMSG-N: UI and STEP still
+        # reach their own copies, LOST-N reaches nothing
+        with mock.patch.object(ad, "UI_LIBRARY", "UI"):
+            mc = ad._message_codes(objs, ["NOCAT"])
+        self.assertEqual(mc["emitters_without_catalog"], [
+            {"object": "LOST-N", "codes": [9924], "commented_out_emits": 1,
+             "resolution": "outside steplib chain"}])
+        by = {c["key"]: c for c in mc["catalogs"]}
+        self.assertEqual(by["UI/CAMSG-N"]["emitted"], {"9800": ["RDCRUISP"]})
+        self.assertEqual(by["STEP/CAMSG-N"]["emitted"],
+                         {"9904": ["SVC-N"], "9999": ["SVC-N"]})
+        self.assertNotIn("9924", by["UI/CAMSG-N"]["emitted"])
+        self.assertNotIn("9924", by["STEP/CAMSG-N"]["emitted"])
+
+    def test_message_reconciliation_without_any_catalog_in_scope(self):
+        objs = {"SOLO/SVC-N": _lib_obj("SOLO", "SVC-N", "subprogram", """\
+            MOVE 9904 TO MSG-GROUP-PARA.MSG-NR
+            END
+        """)}
+        mc = ad._message_codes(objs, [])
+        self.assertIsNone(mc["primary"])
+        self.assertEqual(mc["catalogs"], [])
+        self.assertEqual(mc["catalog"], [])
+        self.assertEqual(mc["emitted"], {})
+        self.assertEqual(mc["emitters_without_catalog"], [
+            {"object": "SVC-N", "codes": [9904], "commented_out_emits": 0,
+             "resolution": "not in analyzed scope"}])
+
     def test_using_scope_takes_the_data_area_the_caller_actually_reaches(self):
         refs, _ = ad._references(SHADOW_OBJS, ["STEP"])
         scopes = ad._scopes(SHADOW_OBJS, refs)
@@ -652,6 +761,20 @@ class DispositionControlTotals(unittest.TestCase):
             {int(c) for c in mc["emitted"]} | set(mc["cataloged_never_emitted"]),
         )
         self.assertEqual(self.ct["commented_out_message_emits"], 10)
+        # one catalog definition in the sample; every emitter resolves to it
+        self.assertEqual(self.ct["message_catalogs"], ["CAMSG-N"])
+        self.assertEqual(self.ct["message_emitters_without_catalog"], [])
+        self.assertEqual(self.ct["message_emitters_ambiguous_catalog"], [])
+        self.assertEqual(mc["primary"], "CRUISE16/CAMSG-N")
+        self.assertEqual(len(mc["catalogs"]), 1)
+        self.assertEqual(mc["catalogs"][0]["emitters"], {
+            "CONEW-N": "current library", "CRGET-N": "current library",
+            "CRLIST-N": "current library", "CUGET-N": "current library",
+            "CUMOD-N": "current library", "CUNEW-N": "current library",
+        })
+        emitters = {e for v in mc["emitted"].values() for e in v}
+        emitters |= {c["object"] for c in mc["commented_out_emits"]}
+        self.assertEqual(emitters, set(mc["catalogs"][0]["emitters"]))
 
     def test_pda_fields_never_assigned_exact(self):
         self.assertEqual(set(self.ct["pda_fields_never_assigned"]), {

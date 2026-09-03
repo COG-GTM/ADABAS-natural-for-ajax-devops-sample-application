@@ -25,8 +25,11 @@ sources under `SunnyIslands/Natural-Libraries/`. **Do not edit by hand.**
 | Dynamic invocations (unresolvable statically) | 0 |
 | Objects unreferenced in analyzed scope | CA3900-N, CONTPDA, IMG-LOAD, MYPDA, NCCUSL-P, SYPDA, YACHTPDA |
 | Standalone programs with no UI path | DELETECU |
-| Message codes cataloged in CAMSG-N | 31 |
-| Message codes emitted by executable code | 11 |
+| Message catalog definitions (`CAMSG-N`) in scope | `CAMSG-N` |
+| Emitters whose `CAMSG-N` resolves to no catalog in scope | none |
+| Emitters that may reach more than one catalog (steplib order unknown) | none |
+| Message codes cataloged in CAMSG-N (catalog reached from the UI library) | 31 |
+| Message codes emitted by executable code resolving to that catalog | 11 |
 | Cataloged but never emitted | 20 |
 | Emitted but not cataloged | 0 |
 | Commented-out message emits | 10 |
@@ -141,7 +144,13 @@ sources under `SunnyIslands/Natural-Libraries/`. **Do not edit by hand.**
 
 ## Message catalog reconciliation (CAMSG-N)
 
-Cataloged: 31 · Emitted: 11 · Cataloged-never-emitted: 20 · Emitted-not-cataloged: 0
+Each emitter is reconciled against the `CAMSG-N` definition Natural
+resolves from the emitter's own library and then the steplib chain,
+so same-named catalogs in different libraries are reported separately.
+
+### `CRUISE16/CAMSG-N` (`SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CAMSG-N.NSN`)
+
+Cataloged: 31 · Emitted: 11 · Cataloged-never-emitted: 20 · Emitted-not-cataloged: 0 · Emitters: `CONEW-N` (current library), `CRGET-N` (current library), `CRLIST-N` (current library), `CUGET-N` (current library), `CUMOD-N` (current library), `CUNEW-N` (current library)
 
 | Code | Text (EN) | Emitted by | Status |
 |---|---|---|---|
@@ -177,7 +186,7 @@ Cataloged: 31 · Emitted: 11 · Cataloged-never-emitted: 20 · Emitted-not-catal
 | 9935 | no valid data found for update | — | **never emitted** |
 | 9999 | Function not yet supported | `CONEW-N`, `CRLIST-N`, `CUGET-N`, `CUMOD-N`, `CUNEW-N` | emitted |
 
-### Commented-out message emits
+#### Commented-out message emits
 
 | Object | Line | Code |
 |---|---|---|

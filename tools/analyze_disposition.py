@@ -268,41 +268,94 @@ def _reachability(objs, refs, steplibs=PROJECT_STEPLIBS):
     return rows
 
 
+_MSG_EMIT_RE = re.compile(r"MOVE\s+(\d{4})\s+TO\s+MSG-GROUP-PARA\.MSG-NR")
+_MSG_TEXT_RE = re.compile(r"VALUE\s+(\d{4})\s+COMPRESS\s+'([^']*)'")
+
+
+def _catalog_entry(key, o, label):
+    texts = {}
+    for raw in o["_src"].splitlines():
+        m = _MSG_TEXT_RE.search(raw)
+        if m:
+            texts.setdefault(int(m.group(1)), []).append(m.group(2).strip())
+    return {
+        "key": key,
+        "label": label,
+        "library": o["library"],
+        "path": o["path"],
+        "catalog": sorted(sp.camsg_codes(o["_src"])),
+        "texts": {str(c): v for c, v in sorted(texts.items())},
+        "emitters": {},
+        "_emitted": {},
+        "commented_out_emits": [],
+    }
+
+
 def _message_codes(objs, steplibs=PROJECT_STEPLIBS):
+    """Reconcile message emissions with the ``MESSAGE_CATALOG`` definition each
+    emitter reaches.  A code object emits by ``MOVE nnnn TO MSG-GROUP-PARA
+    .MSG-NR`` and the translation is whichever ``CAMSG-N`` Natural resolves
+    from that object's library (own library, then the steplib chain), so
+    emissions are grouped per catalog definition rather than pooled.  The
+    top-level ``catalog`` / ``emitted`` / ... keys describe the catalog the
+    UI library reaches (``primary``); ``catalogs`` lists every definition,
+    ``emitters_without_catalog`` the objects whose emissions reach no
+    catalog and ``ambiguous_emitters`` those that may reach more than one."""
     if steplibs is PROJECT_STEPLIBS:
         steplibs = _steplibs()
     labels = _labels(objs)
-    # the catalog the UI adapter's CALLNAT 'CAMSG-N' actually reaches
-    keys, _ = _find(objs, MESSAGE_CATALOG, UI_LIBRARY, steplibs)
-    catalog_src = objs[keys[0]]["_src"] if keys else ""
-    camsg = sp.camsg_codes(catalog_src)
-    emitted = {}
-    commented = []
+    catalogs = {k: _catalog_entry(k, o, labels[k]) for k, o in objs.items()
+                if o["object"] == MESSAGE_CATALOG}
+    primary_keys, _ = _find(objs, MESSAGE_CATALOG, UI_LIBRARY, steplibs)
+    primary = primary_keys[0] if len(primary_keys) == 1 else None
+    without_catalog = []
+    ambiguous = []
     for key, o in objs.items():
         if o["type"] not in CODE_TYPES:
             continue
         name = labels[key]
-        for code in sp.message_codes(o["_src"]):
-            emitted.setdefault(code, []).append(name)
+        codes = sorted(sp.message_codes(o["_src"]))
+        commented = []
         for lineno, raw in enumerate(o["_src"].splitlines(), 1):
             st = raw.strip()
             if st.startswith(("*", "/*")):
-                m = re.search(r"MOVE\s+(\d{4})\s+TO\s+MSG-GROUP-PARA\.MSG-NR", st)
+                m = _MSG_EMIT_RE.search(st)
                 if m:
                     commented.append({"object": name, "line": lineno,
                                       "code": int(m.group(1))})
-    texts = {}
-    for raw in catalog_src.splitlines():
-        m = re.search(r"VALUE\s+(\d{4})\s+COMPRESS\s+'([^']*)'", raw)
-        if m:
-            texts.setdefault(int(m.group(1)), []).append(m.group(2).strip())
+        if not codes and not commented:
+            continue
+        reached, how = _find(objs, MESSAGE_CATALOG, o["library"], steplibs)
+        if not reached:
+            without_catalog.append({"object": name, "codes": codes,
+                                    "commented_out_emits": len(commented),
+                                    "resolution": how})
+            continue
+        if len(reached) > 1:
+            ambiguous.append({"object": name, "codes": codes,
+                              "catalogs": reached, "resolution": how})
+        for ck in reached:
+            cat = catalogs[ck]
+            cat["emitters"][name] = how
+            for code in codes:
+                cat["_emitted"].setdefault(code, []).append(name)
+            cat["commented_out_emits"].extend(commented)
+    for cat in catalogs.values():
+        camsg = set(cat["catalog"])
+        emitted = cat.pop("_emitted")
+        cat["emitted"] = {str(c): sorted(v) for c, v in sorted(emitted.items())}
+        cat["cataloged_never_emitted"] = sorted(camsg - set(emitted))
+        cat["emitted_not_cataloged"] = sorted(set(emitted) - camsg)
+        cat["emitters"] = dict(sorted(cat["emitters"].items()))
+    empty = {"catalog": [], "emitted": {}, "cataloged_never_emitted": [],
+             "emitted_not_cataloged": [], "commented_out_emits": [], "texts": {}}
+    top = catalogs[primary] if primary else empty
     return {
-        "catalog": sorted(camsg),
-        "emitted": {str(c): sorted(v) for c, v in sorted(emitted.items())},
-        "cataloged_never_emitted": sorted(camsg - set(emitted)),
-        "emitted_not_cataloged": sorted(set(emitted) - camsg),
-        "commented_out_emits": commented,
-        "texts": {str(c): v for c, v in sorted(texts.items())},
+        "primary": primary,
+        "catalogs": [catalogs[k] for k in sorted(catalogs)],
+        "emitters_without_catalog": without_catalog,
+        "ambiguous_emitters": ambiguous,
+        **{k: top[k] for k in empty},
     }
 
 
@@ -875,6 +928,12 @@ def control_totals(result):
         "unreferenced_objects": sorted(unref_objects),
         "standalone_programs_no_ui_path": sorted(standalone),
         "definitions_not_reached_by_name_resolution": sorted(shadowed_defs),
+        "message_catalogs": [c["label"] for c in mc["catalogs"]],
+        "message_emitters_without_catalog": sorted(
+            f"{e['object']} ({e['resolution']})"
+            for e in mc["emitters_without_catalog"]),
+        "message_emitters_ambiguous_catalog": sorted(
+            e["object"] for e in mc["ambiguous_emitters"]),
         "message_codes_cataloged": len(mc["catalog"]),
         "message_codes_emitted": len(mc["emitted"]),
         "message_codes_cataloged_never_emitted": len(mc["cataloged_never_emitted"]),
@@ -941,8 +1000,16 @@ def render_markdown(result):
         ("Dynamic invocations (unresolvable statically)", ct["dynamic_invocations"]),
         ("Objects unreferenced in analyzed scope", ", ".join(ct["unreferenced_objects"]) or "none"),
         ("Standalone programs with no UI path", ", ".join(ct["standalone_programs_no_ui_path"]) or "none"),
-        ("Message codes cataloged in CAMSG-N", ct["message_codes_cataloged"]),
-        ("Message codes emitted by executable code", ct["message_codes_emitted"]),
+        ("Message catalog definitions (`CAMSG-N`) in scope",
+         ", ".join(f"`{c}`" for c in ct["message_catalogs"]) or "none"),
+        ("Emitters whose `CAMSG-N` resolves to no catalog in scope",
+         ", ".join(ct["message_emitters_without_catalog"]) or "none"),
+        ("Emitters that may reach more than one catalog (steplib order unknown)",
+         ", ".join(ct["message_emitters_ambiguous_catalog"]) or "none"),
+        ("Message codes cataloged in CAMSG-N (catalog reached from the UI library)",
+         ct["message_codes_cataloged"]),
+        ("Message codes emitted by executable code resolving to that catalog",
+         ct["message_codes_emitted"]),
         ("Cataloged but never emitted", ct["message_codes_cataloged_never_emitted"]),
         ("Emitted but not cataloged", ct["message_codes_emitted_not_cataloged"]),
         ("Commented-out message emits", ct["commented_out_message_emits"]),
@@ -979,20 +1046,52 @@ def render_markdown(result):
             for r in result["dynamic_invocations"]
         ])
     L += ["", "## Message catalog reconciliation (CAMSG-N)", "",
-          f"Cataloged: {len(mc['catalog'])} · Emitted: {len(mc['emitted'])} · "
-          f"Cataloged-never-emitted: {len(mc['cataloged_never_emitted'])} · "
-          f"Emitted-not-cataloged: {len(mc['emitted_not_cataloged'])}", ""]
-    rows = []
-    for code in mc["catalog"]:
-        emitters = mc["emitted"].get(str(code), [])
-        text = mc["texts"].get(str(code), [""])[-1]
-        rows.append((code, text, ", ".join(f"`{e}`" for e in emitters) or "—",
-                     "emitted" if emitters else "**never emitted**"))
-    L += _md_table(["Code", "Text (EN)", "Emitted by", "Status"], rows)
-    L += ["", "### Commented-out message emits", ""]
-    L += _md_table(["Object", "Line", "Code"], [
-        (f"`{r['object']}`", r["line"], r["code"]) for r in mc["commented_out_emits"]
-    ])
+          "Each emitter is reconciled against the `CAMSG-N` definition Natural",
+          "resolves from the emitter's own library and then the steplib chain,",
+          "so same-named catalogs in different libraries are reported separately.", ""]
+    for cat in mc["catalogs"]:
+        L += [f"### `{cat['key']}` (`{cat['path']}`)", "",
+              f"Cataloged: {len(cat['catalog'])} · Emitted: {len(cat['emitted'])} · "
+              f"Cataloged-never-emitted: {len(cat['cataloged_never_emitted'])} · "
+              f"Emitted-not-cataloged: {len(cat['emitted_not_cataloged'])} · "
+              "Emitters: "
+              + (", ".join(f"`{e}` ({how})" for e, how in cat["emitters"].items())
+                 or "none"),
+              ""]
+        rows = []
+        for code in cat["catalog"]:
+            emitters = cat["emitted"].get(str(code), [])
+            text = cat["texts"].get(str(code), [""])[-1]
+            rows.append((code, text, ", ".join(f"`{e}`" for e in emitters) or "—",
+                         "emitted" if emitters else "**never emitted**"))
+        for code in cat["emitted_not_cataloged"]:
+            rows.append((code, "—",
+                         ", ".join(f"`{e}`" for e in cat["emitted"][str(code)]),
+                         "**emitted but not cataloged**"))
+        L += _md_table(["Code", "Text (EN)", "Emitted by", "Status"], rows)
+        L += ["", "#### Commented-out message emits", ""]
+        L += _md_table(["Object", "Line", "Code"], [
+            (f"`{r['object']}`", r["line"], r["code"])
+            for r in cat["commented_out_emits"]
+        ])
+        if cat is not mc["catalogs"][-1]:
+            L += [""]
+    if mc["emitters_without_catalog"]:
+        L += ["", "### Emitters whose `CAMSG-N` resolves to no catalog in scope", ""]
+        L += _md_table(["Object", "Codes", "Commented-out emits", "Resolution"], [
+            (f"`{e['object']}`", ", ".join(map(str, e["codes"])) or "—",
+             e["commented_out_emits"], e["resolution"])
+            for e in mc["emitters_without_catalog"]
+        ])
+        L += [""]
+    if mc["ambiguous_emitters"]:
+        L += ["### Emitters that may reach more than one catalog", ""]
+        L += _md_table(["Object", "Codes", "Candidate catalogs"], [
+            (f"`{e['object']}`", ", ".join(map(str, e["codes"])) or "—",
+             ", ".join(f"`{k}`" for k in e["catalogs"]))
+            for e in mc["ambiguous_emitters"]
+        ])
+        L += [""]
     L += ["", "## DDM field usage (executable code, resolved through views)", "",
           "A code object is credited only when a reference resolves to a view",
           "of the DDM that is visible in that object's `DEFINE DATA` scope;",
