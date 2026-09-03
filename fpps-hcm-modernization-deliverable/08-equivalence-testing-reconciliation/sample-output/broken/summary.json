@@ -1,0 +1,77 @@
+{
+  "harness_version": "1.0",
+  "batch_id": "SYN-2026-09-BATCH-01",
+  "decimals": 2,
+  "tolerance_cents": 0,
+  "result": "EXCEPTIONS",
+  "exception_count": 24,
+  "exceptions_by_check": {
+    "CT-02": 2,
+    "CT-03": 3,
+    "CT-04": 1,
+    "CT-05": 1,
+    "CT-06": 2,
+    "IN-01": 1,
+    "IN-03": 2,
+    "IN-04": 1,
+    "RL-03": 2,
+    "RL-04": 2,
+    "RL-05": 3,
+    "RL-06": 3,
+    "RL-07": 1
+  },
+  "records_expected": 24,
+  "records_actual": 24,
+  "records_matched": 20,
+  "records_mismatched": 4,
+  "records_missing": 0,
+  "records_unexpected": 0,
+  "control_totals": {
+    "legacy_expected": {
+      "record_count": 24,
+      "accepted_count": 11,
+      "rejected_count": 13,
+      "count_by_msg_nr": {
+        "0": 1,
+        "9800": 11,
+        "9902": 6,
+        "9904": 2,
+        "9905": 2,
+        "9918": 2
+      },
+      "price_sum": "14195.48",
+      "contract_id_count": 11,
+      "distinct_contract_id_count": 11,
+      "availability_delta": {
+        "1484": -3,
+        "196": -5,
+        "2201": -2,
+        "2202": -1,
+        "696": 0
+      }
+    },
+    "hcm_output": {
+      "record_count": 24,
+      "accepted_count": 13,
+      "rejected_count": 11,
+      "count_by_msg_nr": {
+        "0": 1,
+        "9800": 13,
+        "9902": 5,
+        "9904": 2,
+        "9905": 2,
+        "9918": 1
+      },
+      "price_sum": "16835.46",
+      "contract_id_count": 13,
+      "distinct_contract_id_count": 12,
+      "accepted_per_cruise": {
+        "1484": 3,
+        "196": 6,
+        "2201": 3,
+        "2202": 1
+      }
+    },
+    "price_sum_diff_cents": 263998
+  }
+}
