@@ -1,0 +1,25 @@
+check,txn_id,field,expected,actual,detail
+CT-02,*,accepted_count,11,13,batch accepted_count differs by +2
+CT-02,*,rejected_count,13,11,batch rejected_count differs by -2
+CT-03,*,count_by_msg_nr[9800],11,13,message code 9800 occurrences differ by +2
+CT-03,*,count_by_msg_nr[9902],6,5,message code 9902 occurrences differ by -1
+CT-03,*,count_by_msg_nr[9918],2,1,message code 9918 occurrences differ by -1
+CT-04,*,price_sum,14195.48,16835.46,sum of PRICE over accepted records differs by +263998 cent(s)
+CT-05,*,distinct_contract_id_count,13,12,CONTRACT_ID values in the HCM output are not unique
+CT-06,*,availability_delta[196],-5,-6,"cruise 196: accepted bookings imply availability delta -6, legacy -5"
+CT-06,*,availability_delta[2201],-2,-3,"cruise 2201: accepted bookings imply availability delta -3, legacy -2"
+IN-01,T-0017;T-0018,contract_id,unique,500107,CONTRACT_ID 500107 assigned to 2 transactions
+IN-03,T-0001;T-0002;T-0011;T-0017;T-0021;T-0022,availability,<= 5 accepted,6 accepted,cruise 196 oversold: 6 bookings accepted against 5 available
+IN-03,T-0004;T-0015;T-0016,availability,<= 2 accepted,3 accepted,cruise 2201 oversold: 3 bookings accepted against 2 available
+IN-04,T-0011,customer_id,in NCCUSTOMER,99999999,booking accepted for customer '99999999' who is not in the synthetic customer master
+RL-03,T-0011,outcome,REJECTED,ACCEPTED,outcome differs
+RL-03,T-0016,outcome,REJECTED,ACCEPTED,outcome differs
+RL-04,T-0011,message_code,9918,9800,message_code differs
+RL-04,T-0016,message_code,9902,9800,message_code differs
+RL-05,T-0011,contract_id,,500113,contract_id differs
+RL-05,T-0016,contract_id,,500112,contract_id differs
+RL-05,T-0018,contract_id,500108,500107,contract_id differs
+RL-06,T-0004,price,1349.99,1349.98,PRICE differs by -1 cent(s)
+RL-06,T-0011,price,,1290.00,PRICE present on one side only
+RL-06,T-0016,price,,1349.99,PRICE present on one side only
+RL-07,T-0011,availability_after,3,2,availability_after differs

@@ -1,0 +1,63 @@
+{
+  "harness_version": "1.0",
+  "batch_id": "SYN-2026-09-BATCH-01",
+  "decimals": 2,
+  "tolerance_cents": 0,
+  "result": "RECONCILED",
+  "exception_count": 0,
+  "exceptions_by_check": {},
+  "records_expected": 24,
+  "records_actual": 24,
+  "records_matched": 24,
+  "records_mismatched": 0,
+  "records_missing": 0,
+  "records_unexpected": 0,
+  "control_totals": {
+    "legacy_expected": {
+      "record_count": 24,
+      "accepted_count": 11,
+      "rejected_count": 13,
+      "count_by_msg_nr": {
+        "0": 1,
+        "9800": 11,
+        "9902": 6,
+        "9904": 2,
+        "9905": 2,
+        "9918": 2
+      },
+      "price_sum": "14195.48",
+      "contract_id_count": 11,
+      "distinct_contract_id_count": 11,
+      "availability_delta": {
+        "1484": -3,
+        "196": -5,
+        "2201": -2,
+        "2202": -1,
+        "696": 0
+      }
+    },
+    "hcm_output": {
+      "record_count": 24,
+      "accepted_count": 11,
+      "rejected_count": 13,
+      "count_by_msg_nr": {
+        "0": 1,
+        "9800": 11,
+        "9902": 6,
+        "9904": 2,
+        "9905": 2,
+        "9918": 2
+      },
+      "price_sum": "14195.48",
+      "contract_id_count": 11,
+      "distinct_contract_id_count": 11,
+      "accepted_per_cruise": {
+        "1484": 3,
+        "196": 5,
+        "2201": 2,
+        "2202": 1
+      }
+    },
+    "price_sum_diff_cents": 0
+  }
+}

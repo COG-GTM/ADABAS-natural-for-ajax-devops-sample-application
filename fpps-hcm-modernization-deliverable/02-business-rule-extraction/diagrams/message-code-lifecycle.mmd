@@ -1,0 +1,21 @@
+flowchart LR
+    classDef ok fill:#e9f7ef,stroke:#1e7e34,color:#000
+    classDef info fill:#fff4e5,stroke:#b26a00,color:#000
+    classDef gap fill:#fbe9e7,stroke:#b71c1c,color:#000
+
+    S["Service sets MSG-NR<br/>(11 codes emitted in analyzed scope)"] --> C["CALLNAT 'CAMSG-N' MSG-GROUP-PARA"]
+    C --> L{"MSG-LANG = '2'?<br/>CAMSG-N.NSN:17, 101<br/>P-LANG never assigned by the adapter"}
+    L -- "yes (unreachable in analyzed scope)" --> DE["German DECIDE block<br/>CAMSG-N.NSN:19-98"]
+    L -- "no (always, in analyzed scope)" --> EN["English DECIDE block<br/>CAMSG-N.NSN:102-181"]
+    EN --> K{"code in catalogue?"}
+    K -- "success code (9800, 9807 and five never-emitted)" --> Z["MSG-NR := 0, text set<br/>CAMSG-N.NSN:104-106, 132-134"]:::ok
+    K -- "other cataloged code" --> T["text set, MSG-NR unchanged"]:::info
+    K -- "not cataloged" --> P["NONE IGNORE: code passes through, text empty<br/>CAMSG-N.NSN:180 (BR-035)"]:::gap
+    Z --> TY{"MSG-NR = 0?<br/>CAMSG-N.NSN:185-189"}
+    T --> TY
+    P --> TY
+    TY -- yes --> TS["MSG-TYPE 'S'"]:::ok
+    TY -- no --> TI["MSG-TYPE 'I'"]:::info
+    TS --> R["P-RSPCODE = MSG-NR; P-RSPTXT = type-text<br/>e.g. CONEW-N.NSN:143-146"]
+    TI --> R
+    R --> UI["Adapter tests P-RSPCODE = '0'<br/>RDCRUISP.NSP:584-590"]

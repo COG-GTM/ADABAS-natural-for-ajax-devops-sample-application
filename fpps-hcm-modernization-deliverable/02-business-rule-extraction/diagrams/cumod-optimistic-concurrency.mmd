@@ -1,0 +1,22 @@
+sequenceDiagram
+    autonumber
+    participant UI as RDCRUISP adapter (RDCRUISP.NSP:612-657)
+    participant S as CUMOD-N
+    participant DB as NCCUSTOMER (synthetic simulation)
+
+    UI->>S: P-PERSON-ID, P-TIMESTAMP (from the earlier CUGET-N read), new field values
+    S->>DB: FIND (1) NCCUSTOMER WITH PERSON-ID (CUMOD-N.NSN:44)
+    alt no record (BR-029)
+        S-->>UI: 9924 Customer Id not found (CUMOD-N.NSN:46)
+    else record found
+        S->>S: stored TIMESTAMP = P-TIMESTAMP ? (CUMOD-N.NSN:50)
+        alt equal (BR-031, BR-032)
+            S->>DB: move surname, first name, e-mail, address, birth date, then TIMESTAMP = *TIMESTMP (CUMOD-N.NSN:53-62)
+            S->>DB: UPDATE (F1.), END TRANSACTION (CUMOD-N.NSN:63-64)
+            S-->>UI: response 0, refreshed timestamp returned in P-CUSTOMER-DATA
+        else different (BR-032)
+            S-->>UI: 9934 Customer changed from another user (CUMOD-N.NSN:67)
+            UI->>UI: restore the previously read values into the screen fields (RDCRUISP.NSP:644-657)
+        end
+    end
+    Note over UI,DB: Demonstrated in source - harness needed (no CUMOD-N model in tests/harness/natural_model.py). Target REQ-I-004 lost-update protection (Designed)
