@@ -1,0 +1,34 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#ffffff', 'primaryTextColor': '#000000', 'primaryBorderColor': '#3969CA', 'lineColor': '#555555', 'textColor': '#000000', 'edgeLabelBackground': '#ffffff', 'clusterBkg': '#fafafa', 'clusterBorder': '#bbbbbb', 'fontFamily': 'Liberation Sans', 'fontSize': '18px'}, 'flowchart': {'wrappingWidth': 300, 'padding': 12, 'nodeSpacing': 30, 'rankSpacing': 22}}}%%
+flowchart LR
+  subgraph discover["1 · Discover and extract"]
+    direction TB
+    SRC["Legacy estate<br/>Natural 9.x · ADABAS DDMs<br/>STEPLIB · JCL"]
+    DISC["Discover<br/>inventory · call graph<br/>interfaces"]
+    RULES["Extract<br/>rules with file + line<br/>dictionary · process flows"]
+    SRC --> DISC --> RULES
+  end
+  subgraph decide["2 · Decide and baseline"]
+    direction TB
+    DISP["Decide<br/>keep · correct · retire<br/>evidence-backed ledger"]
+    REQ["Requirements baseline<br/>acceptance criteria<br/>HCM-fit rating"]
+    CFG["Oracle HCM or alternate<br/>configured and loaded<br/>by the integrator"]
+    DISP --> REQ --> CFG
+  end
+  subgraph proof["3 · Prove"]
+    direction TB
+    PRE["Pre-load<br/>profile · cleanse<br/>reconcile master data"]
+    POST["Post-load<br/>equivalence · penny-level<br/>regression · run-compare"]
+    PRE ~~~ POST
+  end
+  discover --> decide
+  decide <--> proof
+  classDef legacy fill:#f4f4f4,stroke:#999999;
+  classDef work fill:#dbe6f8,stroke:#3969CA,stroke-width:2px;
+  classDef prize fill:#bdeedf,stroke:#21C19A,stroke-width:3px;
+  classDef si fill:#d4ecfa,stroke:#0294DE,stroke-width:2px;
+  classDef test fill:#ffffff,stroke:#21C19A,stroke-width:2px;
+  class SRC legacy;
+  class DISC,RULES,DISP work;
+  class REQ prize;
+  class CFG si;
+  class PRE,POST test;

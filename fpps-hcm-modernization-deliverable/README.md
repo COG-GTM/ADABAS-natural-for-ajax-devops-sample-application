@@ -32,7 +32,7 @@ Each directory contains presentation-grade artifacts, Mermaid diagrams (with exp
 
 | # | Directory | Capability | Why it matters to an SI implementing an HCM | Builds on (existing repository artifacts) |
 |---|---|---|---|---|
-| 00 | [`00-executive-value-brief/`](00-executive-value-brief/) | Executive value brief (2–3 page export) | Gives program leadership the positioning, scope split, proof points, and honest maturity statement needed to sponsor the approach | Everything below; [`docs/concurrency-refactor.md`](../docs/concurrency-refactor.md) |
+| 00 | [`00-executive-value-brief/`](00-executive-value-brief/) | Executive value brief (Markdown master + branded [PDF](00-executive-value-brief/Cognition-FPPS-HCM-Executive-Value-Brief.pdf)) | Gives program leadership the positioning, scope split, proof points, and honest maturity statement needed to sponsor the approach | Everything below; [`docs/concurrency-refactor.md`](../docs/concurrency-refactor.md) |
 | 01 | [`01-discoverability-comprehension-baseline/`](01-discoverability-comprehension-baseline/) | Discoverability & comprehension baseline | You cannot scope, price, or configure what you cannot see. Architecture map, module inventory, and call graph across the business-logic (`CRUISE16`) and presentation (`RDCRUISE`) libraries | [`docs/module-inventory.md`](../docs/module-inventory.md), [`docs/call-map.md`](../docs/call-map.md) |
 | 02 | [`02-business-rule-extraction/`](02-business-rule-extraction/) | Business-rule extraction with source traceability & confidence | Rules are the eligibility/validation edits an HCM must reproduce. Every rule cites file + line in the real `.NSN` source and carries a confidence score | `CRUISE16/Subprograms/CONEW-N.NSN` (codes 9800/9902/9904/9905/9918), `CAMSG-N.NSN`, [`tests/test_source_conformance.py`](../tests/test_source_conformance.py) |
 | 03 | [`03-data-model-data-dictionary/`](03-data-model-data-dictionary/) | Master-data model & field-level data dictionary | The definition of master data that HCM Data Loader mapping starts from — formats, lengths, descriptors, usage, lineage, source keys | [`docs/data-dictionary.md`](../docs/data-dictionary.md), [`tools/generate_data_dictionary.py`](../tools/generate_data_dictionary.py), the four DDMs |
@@ -79,6 +79,8 @@ python3 -m unittest discover -s tests -v          # regression + source-conforma
 python3 -m compileall -q tests tools
 python3 tools/generate_data_dictionary.py          # regenerates docs/data-dictionary.md from the DDMs
 python3 tools/analyze_disposition.py               # regenerates 10-.../evidence/ from the Natural sources
+# every capability generator also supports --check (drift gate), e.g.:
+python3 fpps-hcm-modernization-deliverable/10-migration-disposition-dead-code/generate_ledger.py --check
 ```
 
 All generated artifacts carry a "generated — do not edit by hand" header, and the test suite fails if a committed artifact drifts from its generator.
