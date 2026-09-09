@@ -102,7 +102,8 @@ class WaitTicket:
     ``done`` becomes true when the operation returned (``result``) or was
     abandoned (``error``: ``HoldTimeoutError``, ``DeadlockError`` or the
     operation's own exception, after its transaction was backed out);
-    ``waits`` counts how often it was parked; ``attempts`` how often it ran.
+    ``waits`` is the wait budget consumed (re-parks + clock ticks);
+    ``attempts`` how often it ran.
     """
 
     def __init__(self, session, operation):
@@ -265,13 +266,21 @@ class Session:
         The claim is a hold on the ledger row, so a concurrent transaction
         for the same request meets ``RecordHeldError`` (and re-checks the
         ledger on its next attempt) instead of booking a second time.
+        ``payload`` is a dict, or a zero-argument callable evaluated at ET
+        time (so the entry can describe the outcome the same ET commits).
+        Either way the ledger stores its own copy.
         """
         self.hold(REQUEST_LEDGER, request_id)
         self._pending_requests.append((request_id, payload))
 
     def completed_request(self, request_id):
-        """The committed outcome of ``request_id``, or None."""
-        return self.db.request_ledger.get(request_id)
+        """A copy of the committed outcome of ``request_id``, or None."""
+        return copy.deepcopy(self.db.request_ledger.get(request_id))
+
+    def pending_stores(self, file_name):
+        """Copies of the rows this transaction has buffered for STORE."""
+        return [dict(row) for name, row in self._pending_stores
+                if name == file_name]
 
     # -- transaction end -----------------------------------------------
 
@@ -286,12 +295,14 @@ class Session:
             if request_id in self.db.request_ledger:
                 self.backout()
                 raise DuplicateRequestError(request_id)
+        entries = [(request_id, dict(payload() if callable(payload) else payload))
+                   for request_id, payload in self._pending_requests]
         for (file_name, isn), values in self._pending_updates.items():
             self.db.files[file_name].records[isn].update(values)
         for file_name, row in self._pending_stores:
             self.db.files[file_name].insert(row)
-        for request_id, payload in self._pending_requests:
-            self.db.request_ledger[request_id] = payload
+        for request_id, entry in entries:
+            self.db.request_ledger[request_id] = entry
         self.db.et_count += 1
         self._reset()
 
@@ -317,9 +328,12 @@ class Session:
 class AdabasSim:
     """The nucleus: files, the hold table and (optionally) a hold queue.
 
-    ``wait_limit`` bounds how often a parked operation may be re-parked
-    before it is abandoned with ``HoldTimeoutError`` (None = wait forever,
-    0 = never wait, i.e. the ADABAS "return immediately" hold option).
+    ``wait_limit`` is a parked operation's wait budget in *wait units*: a
+    unit is consumed each time the operation is re-parked after a resume
+    and each time ``tick()`` advances the simulated clock while it waits.
+    A ticket whose budget is spent is abandoned with ``HoldTimeoutError``
+    (None = wait forever, 0 = never wait, i.e. the ADABAS "return
+    immediately" hold option).
     """
 
     def __init__(self, wait_limit=None):
@@ -360,6 +374,35 @@ class AdabasSim:
     def waiting(self):
         """Tickets currently parked, in queue order."""
         return [t for waiters in self.hold_queue.values() for t in waiters]
+
+    def tick(self, units=1):
+        """Advance the simulated clock: every parked ticket consumes
+        ``units`` of its wait budget, and those whose budget is spent time
+        out now (backed out, dequeued) even though their holder has not
+        released. No-op when ``wait_limit`` is None. Returns the tickets
+        that timed out, in queue order."""
+        expired = []
+        if self.wait_limit is None:
+            return expired
+        for ticket in self.waiting():
+            ticket.waits += units
+            if ticket.waits >= self.wait_limit:
+                expired.append(ticket)
+        for ticket in expired:
+            self._dequeue(ticket)
+            holder = self.hold_table.get(ticket.key)
+            key = ticket.key
+            ticket.key = None
+            self._abandon(ticket, HoldTimeoutError(key, holder, ticket.session))
+        return expired
+
+    def _dequeue(self, ticket):
+        waiters = self.hold_queue.get(ticket.key, [])
+        if ticket in waiters:
+            waiters.remove(ticket)
+        if not waiters:
+            self.hold_queue.pop(ticket.key, None)
+        self._parked.pop(ticket.session, None)
 
     def _drive(self, ticket):
         """Run the ticket once. A hold conflict parks it; any other exception

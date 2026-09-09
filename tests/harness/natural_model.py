@@ -265,6 +265,23 @@ def conew_refactored(session, customer_in, cruise_in, booking_date=20260820,
 # ---------------------------------------------------------------------------
 
 
+class RequestMismatchError(Exception):
+    """An idempotency key was re-used for a request with different inputs;
+    replaying the stored outcome would silently answer the wrong booking."""
+
+    def __init__(self, request_id, stored, presented):
+        super().__init__(
+            f"request {request_id!r} was committed for {stored}, "
+            f"re-driven with {presented}")
+        self.request_id = request_id
+        self.stored = stored
+        self.presented = presented
+
+
+def _request_fingerprint(customer_in, cruise_in, booking_date):
+    return (customer_in.strip(), cruise_in.strip(), booking_date)
+
+
 @contextmanager
 def _on_error(session):
     """CONEW-N's ON ERROR block (lines 36-40): whatever escapes the
@@ -327,22 +344,36 @@ def conew_with_retry(session, customer_in, cruise_in, booking_date=20260820,
     up in the committed ledger (replaying the stored outcome if present),
     then claims it under a hold so a concurrent transaction for the same id
     is a hold conflict that retries — and finds the replay — rather than a
-    second booking. The ledger entry commits with the booking's own ET.
+    second booking. The ledger entry is bound to the request's inputs
+    (``RequestMismatchError`` when the same id arrives with different
+    inputs) and is written by the booking's own ET, describing the contract
+    that ET stores.
     """
+    fingerprint = _request_fingerprint(customer_in, cruise_in, booking_date)
+
     def replay(done, attempt):
+        if done["fingerprint"] != fingerprint:
+            raise RequestMismatchError(request_id, done["fingerprint"],
+                                       fingerprint)
         result = _finish(BookingResult(), done["msg_nr"],
                          new_contract_id=done["new_contract_id"])
         result.replayed = True
         result.attempts = attempt
         return result
 
+    def committed_outcome():
+        # evaluated by the ET inside conew_refactored, i.e. only on 9800
+        stored = session.pending_stores("NCCONTRACT")
+        return {"msg_nr": MSG_OK,
+                "new_contract_id": stored[-1]["CONTRACT-ID"],
+                "fingerprint": fingerprint}
+
     def attempt_once(attempt):
-        ledger = {}  # committed by the ET inside conew_refactored, filled below
         if request_id is not None:
             done = session.completed_request(request_id)
             if done is not None:
                 return replay(done, attempt)
-            session.record_request(request_id, ledger)  # may raise RecordHeldError
+            session.record_request(request_id, committed_outcome)  # may raise RecordHeldError
         try:
             res = conew_refactored(session, customer_in, cruise_in,
                                    booking_date, hooks)
@@ -352,11 +383,8 @@ def conew_with_retry(session, customer_in, cruise_in, booking_date=20260820,
             session.backout()  # ON ERROR: the abend is not retried
             raise
         res.attempts = attempt
-        if res.msg_nr == MSG_OK:
-            ledger.update(msg_nr=res.msg_nr,
-                          new_contract_id=res.new_contract_id)
-        elif request_id is not None:
-            session.backout()  # discard the unused ledger entry
+        if res.msg_nr != MSG_OK and request_id is not None:
+            session.backout()  # discard the unused ledger claim
         return res
 
     try:

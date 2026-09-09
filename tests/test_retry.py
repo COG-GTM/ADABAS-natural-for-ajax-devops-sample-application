@@ -332,6 +332,89 @@ class BoundedRetryTests(unittest.TestCase):
         self.assertEqual(cruise_status(db), "4")
         self.assertEqual(len(contracts_for(db, 196)), 1)
 
+    def test_waiter_resumed_by_ledger_release_sees_complete_outcome(self):
+        """The ledger entry is written by the same ET that stores the
+        contract, fully formed: a session parked on the ledger claim is
+        re-driven from inside that ET and must observe the complete
+        committed outcome, never an empty or half-filled entry."""
+        db = make_db(cruise_status="5")
+        user1, user2 = db.session("user1"), db.session("user2")
+        tickets = {}
+
+        def observe_ledger_on_resume():
+            user2.hold(REQUEST_LEDGER, "req-15")  # parks behind user1's claim
+            seen = user2.completed_request("req-15")
+            user2.backout()
+            return seen
+
+        def user2_double_submits():
+            tickets["twin"] = db.submit(user2, observe_ledger_on_resume)
+            self.assertEqual(tickets["twin"].key, (REQUEST_LEDGER, "req-15"))
+
+        hooks = nm.Hooks(after_maxid_read=user2_double_submits)
+        first = nm.conew_with_retry(user1, "10000001", "196", hooks=hooks,
+                                    request_id="req-15")
+        twin = tickets["twin"]
+        self.assertEqual((first.msg_nr, twin.done, twin.error), (9800, True, None))
+        self.assertEqual(twin.result, {
+            "msg_nr": 9800, "new_contract_id": first.new_contract_id,
+            "fingerprint": ("10000001", "196", 20260820)})
+        # the ledger holds its own copy, not an alias the caller can mutate
+        twin.result["new_contract_id"] = -1
+        self.assertEqual(user2.completed_request("req-15"), {
+            "msg_nr": 9800, "new_contract_id": first.new_contract_id,
+            "fingerprint": ("10000001", "196", 20260820)})
+
+        redrive = nm.conew_with_retry(user2, "10000001", "196", attempts=1,
+                                      request_id="req-15")
+        self.assertEqual((redrive.msg_nr, redrive.replayed, redrive.new_contract_id),
+                         (9800, True, first.new_contract_id))
+        self.assertEqual(cruise_status(db), "4")
+        self.assertEqual(len(contracts_for(db, 196)), 1)
+        self.assertEqual((db.et_count, db.hold_table, db.waiting()), (1, {}, []))
+
+    def test_reused_request_id_with_different_inputs_is_rejected(self):
+        """An idempotency key is bound to its inputs: re-driving req-17 for a
+        different cruise (or customer) must not replay the 196 booking as if
+        it were the 1484 booking, and must not book 1484 either. Covers the
+        sequential re-drive and the double-submit-then-re-drive path."""
+        db = make_db(cruise_status="5")
+        user1, user2 = db.session("user1"), db.session("user2")
+        first = nm.conew_with_retry(user1, "10000001", "196", request_id="req-17")
+        self.assertEqual(first.msg_nr, 9800)
+        before_1484 = (cruise_status(db, 1484), contracts_for(db, 1484))
+
+        with self.assertRaises(nm.RequestMismatchError) as ctx:
+            nm.conew_with_retry(user1, "10000001", "1484", request_id="req-17")
+        self.assertEqual(ctx.exception.stored, ("10000001", "196", 20260820))
+        self.assertEqual(ctx.exception.presented, ("10000001", "1484", 20260820))
+        with self.assertRaises(nm.RequestMismatchError):
+            nm.conew_with_retry(user1, "10000002", "196", request_id="req-17")
+        # padded input is the same request, not a mismatch (CONEW-N trims)
+        same = nm.conew_with_retry(user1, " 10000001 ", "196 ", request_id="req-17")
+        self.assertEqual((same.replayed, same.new_contract_id),
+                         (True, first.new_contract_id))
+
+        # double submit of req-19 with different inputs while user1 is busy
+        second = {}
+
+        def user2_double_submits():
+            second["result"] = nm.conew_with_retry(
+                user2, "10000001", "1484", attempts=1, request_id="req-19")
+
+        hooks = nm.Hooks(after_maxid_read=user2_double_submits)
+        nm.conew_with_retry(user1, "10000001", "196", hooks=hooks,
+                            request_id="req-19")
+        self.assertEqual(second["result"].msg_nr, 9902)  # busy on the claim
+        with self.assertRaises(nm.RequestMismatchError):
+            nm.conew_with_retry(user2, "10000001", "1484", request_id="req-19")
+
+        self.assertEqual(cruise_status(db), "3")
+        self.assertEqual((cruise_status(db, 1484), contracts_for(db, 1484)),
+                         before_1484)
+        self.assertEqual((db.hold_table, user1.holds, user2.holds),
+                         ({}, set(), set()))
+
     def test_ledger_uniqueness_is_enforced_at_et(self):
         """Belt and braces: if a caller bypasses the claim and two
         transactions both buffer the same request id, the second ET is
@@ -460,6 +543,40 @@ class HoldQueueWaitTests(unittest.TestCase):
         user1.backout()
         self.assertEqual(db.hold_table, {})
         self.assertEqual(db.waiting(), [])
+
+    def test_bounded_wait_expires_behind_a_holder_that_never_releases(self):
+        """Option 1's max-wait must also fire when the holder simply never
+        ends its transaction: the parked waiter's budget is consumed by the
+        clock (``tick``), and at wait_limit it times out, is backed out and
+        dequeued, while the holder's transaction is untouched."""
+        db = make_db(cruise_status="1", wait_limit=3)
+        user1, user2 = db.session("user1"), db.session("user2")
+        isn = begin_booking(user1)  # user1 holds the cruise and walks away
+
+        ticket = db.submit(
+            user2, lambda: nm.conew_refactored(user2, "10000002", "196"))
+        self.assertEqual((ticket.done, ticket.waits), (False, 1))  # 1 of 3
+
+        self.assertEqual(db.tick(), [])  # 2 of 3: still waiting
+        self.assertEqual((ticket.done, ticket.waits), (False, 2))
+        self.assertEqual(db.waiting(), [ticket])
+
+        self.assertEqual(db.tick(), [ticket])  # 3 of 3: budget spent
+        self.assertEqual(ticket.waits, 3)
+        self.assertIsInstance(ticket.error, HoldTimeoutError)
+        self.assertEqual((ticket.error.key, ticket.error.holder), (("NCCRUISE", isn), user1))
+        self.assertEqual((ticket.done, ticket.attempts), (True, 1))
+        self.assertEqual(nm.booking_outcome(ticket).msg_nr, 9902)
+        self.assertEqual((db.waiting(), db.hold_queue, db._parked), ([], {}, {}))
+        self.assertEqual(user2.holds, set())
+        self.assertEqual(cruise_status(db), "1")
+        self.assertEqual(contracts_for(db, 196), [])
+
+        # the holder was never disturbed and can still commit
+        self.assertEqual(db.hold_table, {("NCCRUISE", isn): user1})
+        commit_booking(user1)
+        self.assertEqual((cruise_status(db), db.hold_table), ("0", {}))
+        self.assertEqual(db.tick(), [])  # nothing left to expire
 
     def test_fifo_hold_queue_is_fair_and_starvation_free(self):
         """Three waiters on the last two places resume in arrival order:

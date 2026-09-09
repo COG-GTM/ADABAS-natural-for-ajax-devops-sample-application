@@ -148,7 +148,7 @@ attempt; nothing inside it changes.
 | R2 MAX+1 | each attempt recomputes MAX+1 under the fake-`UPDATE` hold, so a re-drive never reuses an id computed in a backed-out attempt |
 | Pros | orthogonal to Options 1/2/4/5 (wraps any body); BT between attempts guarantees no partial state and no leaked hold; naturally hosts an idempotency key |
 | Cons | re-does validation and reads on every attempt; the correct retryable set must be chosen (a 9902/9918 *business* outcome must not be retried); needs an idempotency key or a re-drive after a lost ET acknowledgement can double-book |
-| Failure modes | retrying a business outcome (double 9918 side effects); re-driving after a successful ET (double booking) — mitigated by the request ledger; two *concurrent* submits of the same request id (a client double-submit) — the ledger row must be claimed under a lock and unique at commit, or both book; unbounded jitter hiding a hot spot |
+| Failure modes | retrying a business outcome (double 9918 side effects); re-driving after a successful ET (double booking) — mitigated by the request ledger; two *concurrent* submits of the same request id (a client double-submit) — the ledger row must be claimed under a lock and unique at commit, or both book; a re-used request id carrying *different* inputs — the ledger entry must be bound to the request's inputs or the wrong booking is replayed as if it were the new one (`RequestMismatchError`); a ledger entry written outside the booking's ET (or filled in after it) — a concurrent waiter would read an incomplete outcome; unbounded jitter hiding a hot spot |
 | Message codes | unchanged; exhaustion → 9902 by default (`exhausted_msg`), 9936 by opt-in; 9999 abends propagate after BT |
 
 Harness: `retry_on_hold`, `RetryBudgetExhausted`, request ledger
@@ -310,9 +310,9 @@ Target-state proofs added by this work, per requirement (all in
 | REQ-I-001 | conditional decrement never goes negative | `test_atomic_decrement_never_goes_negative`, `test_capacity_contention_resolves_via_lock_wait` |
 | REQ-I-002 | no duplicate CONTRACT-ID under hold or retry | `test_maxid_contention_never_duplicates_contract_ids`, `test_interleaved_cruise_and_contract_holds_resolve`, `test_sequence_ids_remove_the_contract_hotspot` |
 | BR-011 / REQ-I-003 | backout leaves no hold, no decrement; abend mid-retry backs out | `test_backout_on_retry_leaves_no_dangling_state`, `test_abend_mid_retry_backs_out_cleanly`, `test_customer_not_found_during_retry_still_backs_out` |
-| BR-011 | idempotent re-drive after a committed ET; concurrent same-id submits book once | `test_completed_attempt_is_never_redriven`, `test_redrive_with_same_request_id_replays_committed_outcome`, `test_failed_request_is_not_recorded_and_can_be_redriven`, `test_concurrent_same_request_id_books_once_and_replays`, `test_same_request_id_retry_finds_the_replay`, `test_ledger_uniqueness_is_enforced_at_et` |
+| BR-011 | idempotent re-drive after a committed ET; concurrent same-id submits book once; the ledger entry is complete in the committing ET and bound to the request's inputs | `test_completed_attempt_is_never_redriven`, `test_redrive_with_same_request_id_replays_committed_outcome`, `test_failed_request_is_not_recorded_and_can_be_redriven`, `test_concurrent_same_request_id_books_once_and_replays`, `test_same_request_id_retry_finds_the_replay`, `test_waiter_resumed_by_ledger_release_sees_complete_outcome`, `test_reused_request_id_with_different_inputs_is_rejected`, `test_ledger_uniqueness_is_enforced_at_et` |
 | BR-011 / REQ-I-003 | an abend after the decrement or after the identifier backs out in every variant; a waiter's abend stays with the waiter | `test_abend_after_swap_backs_out`, `test_abend_after_decrement_backs_out`, `test_resumed_waiter_abend_stays_with_the_waiter` |
-| REQ-N-002 | no starvation / no deadlock under interleaved holds | `test_fifo_hold_queue_is_fair_and_starvation_free`, `test_wait_for_cycle_is_detected_instead_of_blocking_forever`, `test_model_releases_before_waiting_so_no_cycle_forms` |
+| REQ-N-002 | no starvation / no deadlock under interleaved holds; a bounded wait expires even behind a holder that never releases | `test_fifo_hold_queue_is_fair_and_starvation_free`, `test_wait_for_cycle_is_detected_instead_of_blocking_forever`, `test_model_releases_before_waiting_so_no_cycle_forms`, `test_bounded_wait_gives_up_after_repeated_reparking`, `test_bounded_wait_expires_behind_a_holder_that_never_releases` |
 
 ## What the harness adds (and what it does not)
 
@@ -322,16 +322,28 @@ Target-state proofs added by this work, per requirement (all in
   any callable on `RecordHeldError`; raises `RetryBudgetExhausted`.
 * `AdabasSim(wait_limit=N)` + `submit(session, operation)` — hold-queue
   mode. A parked `WaitTicket` is re-driven, in FIFO order, when the holder
-  issues ET or BT; a ticket parked more than `wait_limit` times ends with
-  `HoldTimeoutError`; a wait-for cycle ends with `DeadlockError` instead of
-  hanging. A waiter that abends when re-driven is backed out and its
-  exception recorded on the ticket; the holder's ET/BT that resumed it
-  returns normally.
+  issues ET or BT. `wait_limit` is a budget in wait units: a unit is spent
+  on every re-park and on every `AdabasSim.tick()` (the simulated clock),
+  so a ticket times out with `HoldTimeoutError` both when it keeps meeting
+  holders and when its holder simply never releases; a wait-for cycle ends
+  with `DeadlockError` instead of hanging. A waiter that abends when
+  re-driven is backed out and its exception recorded on the ticket; the
+  holder's ET/BT that resumed it returns normally.
+
+  Re-driving happens synchronously inside the holder's `et()`/`backout()`
+  call. That is a scheduling convenience of a single-threaded simulator,
+  not a claim about platform timing: tests assert *outcomes* (who booked,
+  what the ticket ended with, what is left in the hold table), never the
+  moment at which a waiter ran relative to the holder's return.
 * `Session.update_if` (guarded update), `Session.decrement_if_positive`
   (atomic conditional decrement), `Session.next_id` (sequence not rolled
   back by BT), `record_request` / `completed_request` (idempotency ledger:
-  the id is claimed under a hold and committed with the ET; a duplicate at
-  ET is refused with `DuplicateRequestError` after a BT).
+  the id is claimed under a hold; the entry — a dict or a callable
+  evaluated at ET, so it can describe the contract the same ET stores — is
+  copied into the ledger by that ET; a duplicate at ET is refused with
+  `DuplicateRequestError` after a BT). `conew_with_retry` binds the entry
+  to a fingerprint of the request's inputs and raises
+  `RequestMismatchError` when a re-used id presents different inputs.
 * `RecordHeldError` now carries `key`, `holder` and `requester`; the
   existing `hold`/`update`/`store`/`et`/`backout` semantics are unchanged
   and every pre-existing test runs against the same code.
