@@ -234,6 +234,13 @@ RULES = [
      "committed artifacts match a fresh --check run",
      "fpps-hcm-modernization-deliverable/*/generate_*.py",
      lambda ev: _file(ev, "test_deliverable_generators.py")),
+    ("PKG-OVERVIEW-PAGE", "package integrity",
+     "Every count quoted on the customer-facing methodology page equals the "
+     "generated artifact that owns it, the page fetches nothing from the "
+     "network, and its PDF rendition was produced from the committed page",
+     "fpps-hcm-modernization-deliverable/00-executive-value-brief/"
+     "methodology-overview.html",
+     lambda ev: _file(ev, "test_methodology_overview.py")),
 ]
 
 RULE_INDEX = {r[0]: r for r in RULES}
@@ -267,6 +274,9 @@ FILE_CLASS = {
                                   "fpps-hcm-modernization-deliverable/**/*.md"),
     "test_deliverable_generators.py": ("Package integrity",
                                        "fpps-hcm-modernization-deliverable/**/*.py --check"),
+    "test_methodology_overview.py": ("Package integrity",
+                                     "00-executive-value-brief/methodology-overview.html "
+                                     "data-metric hooks vs. generated artifacts"),
 }
 
 
