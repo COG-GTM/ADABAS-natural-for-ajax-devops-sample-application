@@ -125,6 +125,9 @@ Harness types used below: **service harness** (a model of one Natural service's 
 | AC-REQ-I-001-1 | An offering with one free place; two operators | Both read the count before either writes (interleaved) | Exactly one booking succeeds; the other receives "no longer available"; the count is 0 (the pre-refactor logic produces two bookings — `tests/test_concurrency.py:24-45` proves the defect) | `tests/test_concurrency.py:68-97` | Two concurrent element-entry submissions against a balance of 1 |
 | AC-REQ-I-001-2 | An offering with N free places | N+1 bookings are submitted | N succeed, the last fails, the count is 0 | `tests/test_concurrency.py:129-141` | Sequential load test against the balance |
 | AC-REQ-I-001-3 | The booking service source | The source is inspected | The record is re-read under lock before the check and decrement | `tests/test_source_conformance.py:35-43` | Not applicable in target — the outcome tests above replace the static check |
+| AC-REQ-I-001-4 | An offering with one free place; two operators; the second is blocked or retried by the first | The first commits, then the second's wait ends or its re-drive runs | The second receives "no longer available"; the count is 0; the second holds no lock and has left no partial booking | `tests/test_retry.py:86-102`, `tests/test_retry.py:295-316`, `tests/test_retry.py:493-514` | Concurrent submissions with the platform's lock wait or an application retry |
+| AC-REQ-I-001-5 | An offering whose record stays locked by another transaction for longer than the wait/retry budget | A booking is submitted | A defined "no longer available" (or "busy") outcome is returned within the budget; no hang, no negative count, no partial booking | `tests/test_retry.py:120-141`, `tests/test_retry.py:352-385`, `tests/test_retry.py:535-553` | Lock-wait timeout and bounded retry configured and tested in the acceptance environment |
+| AC-REQ-I-001-6 | An offering with 0 free places | A conditional decrement ("decrement where count > 0") is issued | The decrement is refused, the count stays 0, and the "no longer available" outcome is returned | `tests/test_retry.py:582-590`, `tests/test_retry.py:610-625` | Balance adjustment API refuses to go below zero |
 
 ### REQ-I-002 — Booking identifiers are unique under contention
 
@@ -132,6 +135,8 @@ Harness types used below: **service harness** (a model of one Natural service's 
 |---|---|---|---|---|---|
 | AC-REQ-I-002-1 | Two operators booking different offerings at the same time | Both compute the next identifier before either stores (interleaved) | The two bookings have different identifiers (the pre-refactor logic produces a duplicate — `tests/test_concurrency.py:46-66` proves the defect) | `tests/test_concurrency.py:99-127` | Platform-generated key; uniqueness constraint on the object |
 | AC-REQ-I-002-2 | The booking service source | The source is inspected | The highest booking record is held before the identifier is computed | `tests/test_source_conformance.py:45-53` | Not applicable in target — identifiers are platform-generated |
+| AC-REQ-I-002-3 | Two operators; the first holds the highest booking record while the second's attempt is retried or waits | The second's retry runs after the first commits | The identifiers differ whether serialised by the hold or recomputed on re-drive | `tests/test_retry.py:156-172`, `tests/test_retry.py:416-445` | Not applicable in target (no MAX+1); covered by AC-REQ-I-002-4 |
+| AC-REQ-I-002-4 | Identifiers are issued by the platform (sequence / system key) | Two bookings are created concurrently, one of them after a backed-out attempt | Both identifiers are unique; no shared record is locked to compute them | `tests/test_retry.py:592-608` | Platform-generated key; uniqueness constraint on the object |
 
 ### REQ-I-003 — A booking is all-or-nothing
 
@@ -140,6 +145,7 @@ Harness types used below: **service harness** (a model of one Natural service's 
 | AC-REQ-I-003-1 | A valid offering and an unknown customer | A booking is submitted | Outcome is "customer not found" (9918); the free-place count is unchanged; no booking exists; no lock remains | `tests/test_conew_booking.py:165-175`, `tests/test_conew_booking.py:200-210` | Transaction rolled back; balance unchanged |
 | AC-REQ-I-003-2 | An empty booking file | A booking is submitted | The decrement is backed out and a failure outcome is returned; no lock remains | `tests/test_conew_booking.py:185-198`, `tests/test_source_conformance.py:75-84` | Not applicable in target (no MAX+1); covered by AC-REQ-I-002-1 |
 | AC-REQ-I-003-3 | Any outcome path | The service returns | No record is left held | `tests/test_conew_booking.py:200-210` | Lock-wait monitoring during the acceptance run |
+| AC-REQ-I-003-4 | A booking attempt that is backed out and re-driven, or abends mid-retry | The retry loop gives up or the abend propagates | No lock remains, the count is unchanged, no booking exists; a re-drive of an already-committed request returns the same booking without a second decrement | `tests/test_retry.py:174-200`, `tests/test_retry.py:202-228`, `tests/test_retry.py:241-257` | Idempotent submission key; rollback verified after forced failure in the acceptance run |
 
 ### REQ-I-004 — Lost-update protection on customer data
 
@@ -234,7 +240,7 @@ Counted from the criterion tables above by `../02-business-rule-extraction/gener
 <!-- generated:acceptance-coverage -->
 | Evidence class | Criteria | Requirements touched |
 |---|---|---|
-| Executable check in the repository today | 31 | REQ-D-001, REQ-D-002, REQ-F-001, REQ-F-002, REQ-F-003, REQ-F-007, REQ-I-001, REQ-I-002, REQ-I-003, REQ-I-007, REQ-N-001, REQ-N-002, REQ-N-005, REQ-X-001, REQ-X-002, REQ-X-003, REQ-X-004 |
+| Executable check in the repository today | 37 | REQ-D-001, REQ-D-002, REQ-F-001, REQ-F-002, REQ-F-003, REQ-F-007, REQ-I-001, REQ-I-002, REQ-I-003, REQ-I-007, REQ-N-001, REQ-N-002, REQ-N-005, REQ-X-001, REQ-X-002, REQ-X-003, REQ-X-004 |
 | Design review (not testable in the sample) | 1 | REQ-N-004 |
 | Harness needed — SME decision first | 1 | REQ-D-001 |
 | Harness needed — catalogue check | 1 | REQ-F-007 |
@@ -243,7 +249,7 @@ Counted from the criterion tables above by `../02-business-rule-extraction/gener
 | Harness needed — load reconciliation | 1 | REQ-D-003 |
 | Harness needed — service harness | 15 | REQ-D-003, REQ-D-004, REQ-D-005, REQ-D-006, REQ-F-002, REQ-F-004, REQ-F-005, REQ-F-006, REQ-I-004, REQ-I-006 |
 | Harness needed — target-side test only | 5 | REQ-F-003, REQ-I-006, REQ-X-003 |
-| All criteria | 59 | 29 requirements |
+| All criteria | 65 | 29 requirements |
 <!-- /generated:acceptance-coverage -->
 
 ## Synthetic data and scope

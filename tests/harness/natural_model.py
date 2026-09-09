@@ -16,6 +16,18 @@ Two variants of the CONEW-N booking transaction are modeled:
   and the highest NCCONTRACT record placed in hold (CUNEW-N's fake-UPDATE
   idiom) so ID generation is serialized.
 
+Three further variants make the retry re-architecture options of
+``docs/retry-rearchitecture.md`` executable. They are target-state models
+and leave ``conew_refactored`` (the current-state reference) untouched:
+
+* ``conew_with_retry`` — option 3: bounded BT + re-drive around
+  ``conew_refactored`` with a defined outcome when the budget is spent, an
+  ON ERROR path for abends, and an optional idempotency key.
+* ``conew_optimistic`` — option 2: compare-and-swap on CRUISE-STATUS
+  guarded by the unheld read value, bounded retry, 9902 after the cap.
+* ``conew_target_state`` — options 4 + 5: atomic conditional decrement and
+  a platform-generated CONTRACT-ID (no MAX+1 hotspot).
+
 Message codes mirror CAMSG-N: 9800 booking OK (mapped to response code 0),
 9902 no longer available, 9904 customer number missing, 9905 cruise number
 missing, 9918 customer number not found.
@@ -23,7 +35,7 @@ missing, 9918 customer number not found.
 
 from dataclasses import dataclass, field
 
-from .adabas_sim import RecordHeldError
+from .adabas_sim import RecordHeldError, RetryBudgetExhausted, retry_on_hold
 
 MSG_OK = 9800
 MSG_NOT_AVAILABLE = 9902
@@ -32,6 +44,13 @@ MSG_CRUISE_MISSING = 9905
 MSG_CUSTOMER_NOT_FOUND = 9918
 MSG_CRUISE_LIST_SHOWN = 9807
 MSG_NO_CRUISES_FOUND = 9857
+
+#: Proposed target-state code for "booking could not be serialized within
+#: the retry/wait budget" (docs/retry-rearchitecture.md). Not part of the
+#: production CAMSG-N catalog; CAMSG passes unknown numbers through
+#: unchanged, so the retry variants default to 9902 and only emit this code
+#: when a caller opts in.
+MSG_BOOKING_BUSY = 9936
 
 #: CAMSG-N message numbers that are remapped to response code 0 ("success").
 SUCCESS_CODES = {9800, 9801, 9803, 9804, 9805, 9806, 9807}
@@ -61,6 +80,10 @@ class BookingResult:
     rsp_code: int = 0
     rsp_text: str = ""
     new_contract_id: int = 0
+    #: number of transaction attempts the retry-aware variants needed
+    attempts: int = 0
+    #: True when an idempotent re-drive replayed a committed outcome
+    replayed: bool = False
 
 
 def _is_n8(value):
@@ -222,6 +245,212 @@ def conew_refactored(session, customer_in, cruise_in, booking_date=20260820,
             session.backout()
             return _finish(result, MSG_CUSTOMER_NOT_FOUND)
 
+        session.store("NCCONTRACT", {
+            "CONTRACT-ID": new_id,
+            "PRICE": cruise["PRICE-1W"],
+            "DATE-BOOKING": booking_date,
+            "ID-CRUISE": cruise_id,
+            "ID-CUSTOMER": customer_id,
+        })
+        session.et()
+        return _finish(result, MSG_OK, new_contract_id=new_id)
+    except RecordHeldError:
+        session.backout()
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Retry re-architecture variants (target-state models)
+# ---------------------------------------------------------------------------
+
+
+def _store_and_commit(session, result, cruise, cruise_id, customer_id,
+                      booking_date, new_id):
+    """HANDLE-INPUT-DATA + STORE + ET tail shared by the target-state
+    variants (mirrors the same block in ``conew_refactored``)."""
+    if not _customer_exists(session, customer_id):
+        session.backout()
+        return _finish(result, MSG_CUSTOMER_NOT_FOUND)
+    session.store("NCCONTRACT", {
+        "CONTRACT-ID": new_id,
+        "PRICE": cruise["PRICE-1W"],
+        "DATE-BOOKING": booking_date,
+        "ID-CRUISE": cruise_id,
+        "ID-CUSTOMER": customer_id,
+    })
+    session.et()
+    return _finish(result, MSG_OK, new_contract_id=new_id)
+
+
+def _max_plus_one_held(session):
+    """BR-007 idiom: hold the highest NCCONTRACT record and return MAX+1,
+    or None when the file is empty."""
+    top = session.read_descending("NCCONTRACT", "CONTRACT-ID", limit=1)
+    if not top:
+        return None
+    top_isn, _ = top[0]
+    session.update("NCCONTRACT", top_isn, {})  # fake update -> hold
+    return session.get_held("NCCONTRACT", top_isn)["CONTRACT-ID"] + 1
+
+
+def conew_with_retry(session, customer_in, cruise_in, booking_date=20260820,
+                     hooks=None, attempts=3, before_retry=None,
+                     exhausted_msg=MSG_NOT_AVAILABLE, request_id=None):
+    """Option 3: application-level retry (BT + re-drive) around
+    ``conew_refactored``.
+
+    Every attempt is a complete transaction: ``conew_refactored`` backs out
+    before surfacing ``RecordHeldError``, so nothing buffered or held
+    survives into the next attempt. ``before_retry(attempt, error)`` is the
+    backoff/jitter point (the simulation never sleeps). When ``attempts``
+    is spent the caller receives ``exhausted_msg`` (9902 by default, or
+    ``MSG_BOOKING_BUSY``) with ``attempts`` filled in — never an exception.
+
+    Any other exception is the ON ERROR path: BACKOUT TRANSACTION, then the
+    abend propagates (no retry of an abend).
+
+    ``request_id`` is an idempotency key: the committed outcome is written
+    to the request ledger inside the same transaction as the booking, and a
+    later invocation with the same key replays it without touching
+    NCCRUISE/NCCONTRACT again.
+    """
+    if request_id is not None:
+        done = session.completed_request(request_id)
+        if done is not None:
+            result = _finish(BookingResult(), done["msg_nr"],
+                             new_contract_id=done["new_contract_id"])
+            result.replayed = True
+            return result
+
+    def attempt_once(attempt):
+        ledger = {}  # committed by the ET inside conew_refactored, filled below
+        if request_id is not None:
+            session.record_request(request_id, ledger)
+        try:
+            res = conew_refactored(session, customer_in, cruise_in,
+                                   booking_date, hooks)
+        except RecordHeldError:
+            raise
+        except Exception:
+            session.backout()
+            raise
+        res.attempts = attempt
+        if res.msg_nr == MSG_OK:
+            ledger.update(msg_nr=res.msg_nr,
+                          new_contract_id=res.new_contract_id)
+        elif request_id is not None:
+            session.backout()  # discard the unused ledger entry
+        return res
+
+    try:
+        return retry_on_hold(attempt_once, attempts, before_retry)
+    except RetryBudgetExhausted as exc:
+        result = _finish(BookingResult(), exhausted_msg)
+        result.attempts = exc.attempts
+        return result
+
+
+def booking_outcome(ticket, timeout_msg=MSG_NOT_AVAILABLE):
+    """Option 1: translate a hold-queue ``WaitTicket`` into a booking result.
+
+    A completed ticket yields the booking's own result; a ticket abandoned
+    by the nucleus (``HoldTimeoutError``/``DeadlockError``) becomes the
+    defined ``timeout_msg`` (9902 by default, or ``MSG_BOOKING_BUSY``).
+    """
+    if ticket.error is None:
+        result = ticket.result
+    else:
+        result = _finish(BookingResult(), timeout_msg)
+    result.attempts = ticket.attempts
+    return result
+
+
+def conew_optimistic(session, customer_in, cruise_in, booking_date=20260820,
+                     hooks=None, attempts=3):
+    """Option 2: optimistic compare-and-swap on CRUISE-STATUS.
+
+    The availability decision is taken on an unheld read (as the original
+    code did) but the decrement is applied with ``update_if`` guarded by
+    that value, so a lost update is impossible: a stale guard — or a hold
+    conflict while acquiring the row — backs out, re-reads and retries.
+    After ``attempts`` failed swaps the caller gets 9902.
+    """
+    hooks = hooks or Hooks()
+    result = BookingResult()
+
+    cruise_id, customer_id, pending = _validate_inputs(
+        customer_in, cruise_in, result)
+    if isinstance(pending, BookingResult):
+        return pending
+    msg_nr = pending
+
+    found = session.find("NCCRUISE", "CRUISE-ID", cruise_id)
+    if not found:
+        return _finish(result, msg_nr)
+    isn, cruise = found[0]
+
+    for attempt in range(1, attempts + 1):
+        result.attempts = attempt
+        guard = cruise["CRUISE-STATUS"]
+        hooks.after_status_read()
+        if int(guard) <= 0:
+            return _finish(result, MSG_NOT_AVAILABLE)
+        try:
+            swapped = session.update_if(
+                "NCCRUISE", isn, "CRUISE-STATUS", guard,
+                {"CRUISE-STATUS": str(int(guard) - 1)})
+            if swapped:
+                new_id = _max_plus_one_held(session)
+                if new_id is None:
+                    session.backout()
+                    return _finish(result, MSG_NOT_AVAILABLE)
+                hooks.after_maxid_read()
+                return _store_and_commit(session, result, cruise, cruise_id,
+                                         customer_id, booking_date, new_id)
+        except RecordHeldError:
+            pass
+        session.backout()
+        cruise = session.find("NCCRUISE", "CRUISE-ID", cruise_id)[0][1]
+    return _finish(result, MSG_NOT_AVAILABLE)
+
+
+def conew_target_state(session, customer_in, cruise_in,
+                       booking_date=20260820, hooks=None):
+    """Options 4 + 5 (recommended target state).
+
+    Capacity is taken with one atomic conditional decrement (REQ-I-001) and
+    the contract identifier comes from a platform sequence (REQ-I-002), so
+    the MAX+1 hold on NCCONTRACT disappears. Customer validation runs
+    before any write. Row contention still surfaces as ``RecordHeldError``
+    and is resolved by the platform's lock wait (``AdabasSim.submit``) or a
+    bounded re-drive (``retry_on_hold``).
+    """
+    hooks = hooks or Hooks()
+    result = BookingResult(attempts=1)
+
+    cruise_id, customer_id, pending = _validate_inputs(
+        customer_in, cruise_in, result)
+    if isinstance(pending, BookingResult):
+        return pending
+    msg_nr = pending
+
+    found = session.find("NCCRUISE", "CRUISE-ID", cruise_id)
+    if not found:
+        return _finish(result, msg_nr)
+    isn, cruise = found[0]
+
+    if not _customer_exists(session, customer_id):
+        return _finish(result, MSG_CUSTOMER_NOT_FOUND)
+
+    try:
+        remaining = session.decrement_if_positive(
+            "NCCRUISE", isn, "CRUISE-STATUS")
+        hooks.after_status_read()
+        if remaining is None:
+            session.backout()
+            return _finish(result, MSG_NOT_AVAILABLE)
+        new_id = session.next_id("NCCONTRACT", "CONTRACT-ID")
+        hooks.after_maxid_read()
         session.store("NCCONTRACT", {
             "CONTRACT-ID": new_id,
             "PRICE": cruise["PRICE-1W"],

@@ -8,8 +8,8 @@ available places, exactly as in the real file.
 from .adabas_sim import AdabasSim
 
 
-def make_db(cruise_status="5"):
-    db = AdabasSim()
+def make_db(cruise_status="5", wait_limit=None):
+    db = AdabasSim(wait_limit=wait_limit)
     db.add_file("NCYACHT", [
         {"YACHT-ID": 4711, "YACHT-NAME": "Sunny Dream", "YACHT-TYPE": "Ketch"},
         {"YACHT-ID": 4712, "YACHT-NAME": "Island Breeze", "YACHT-TYPE": "Sloop"},

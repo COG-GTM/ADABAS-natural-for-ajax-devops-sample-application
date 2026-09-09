@@ -12,6 +12,21 @@ depends on:
 The simulation is single-threaded and deterministic: concurrency tests
 interleave two sessions explicitly at the statement level, which mirrors
 how two Natural sessions interleave against one ADABAS nucleus.
+
+Retry and wait semantics (see docs/retry-rearchitecture.md) are layered on
+top of the same primitives:
+
+* ``retry_on_hold`` — bounded application-level retry of a whole operation
+  when it ends in ``RecordHeldError`` (design option 3);
+* ``AdabasSim.submit`` — hold-queue mode: an operation that meets a held
+  record is parked on that record and re-driven, FIFO, when the holder's
+  ET/BT releases it, with an optional wait limit that turns into
+  ``HoldTimeoutError`` and cycle detection that turns into
+  ``DeadlockError`` (design option 1);
+* ``Session.update_if`` — compare-and-swap guarded update (option 2);
+* ``Session.decrement_if_positive`` — atomic conditional decrement
+  (option 5) and ``Session.next_id`` — platform-generated identifier
+  (option 4).
 """
 
 import copy
@@ -20,12 +35,83 @@ import copy
 class RecordHeldError(Exception):
     """Raised when a session tries to hold a record held by another session."""
 
+    def __init__(self, key, holder, requester):
+        super().__init__(
+            f"{key} held by {holder.name}, requested by {requester.name}")
+        self.key = key
+        self.holder = holder
+        self.requester = requester
+
+
+class HoldTimeoutError(RecordHeldError):
+    """The hold could not be granted within the configured wait budget.
+
+    Analog of a hold-queue / transaction time limit expiring on the nucleus
+    (the caller sees a non-zero ADABAS response instead of waiting forever).
+    """
+
+
+class DeadlockError(RecordHeldError):
+    """Two parked sessions each wait for a record the other holds."""
+
+
+class RetryBudgetExhausted(Exception):
+    """Every attempt of ``retry_on_hold`` ended in ``RecordHeldError``."""
+
+    def __init__(self, attempts, last_error):
+        super().__init__(
+            f"{attempts} attempt(s) exhausted; last conflict: {last_error}")
+        self.attempts = attempts
+        self.last_error = last_error
+
+
+def retry_on_hold(operation, attempts=3, before_retry=None):
+    """Run ``operation(attempt)`` until it returns, retrying on a hold conflict.
+
+    ``attempts`` bounds the total number of invocations (1 = no retry).
+    ``before_retry(attempt, error)`` is called between attempts; tests use it
+    to interleave the competitor (or to model backoff) at exactly that point.
+    A returned value is terminal: a completed attempt is never re-driven.
+    Raises ``RetryBudgetExhausted`` once the budget is spent.
+    """
+    if attempts < 1:
+        raise ValueError("attempts must be at least 1")
+    last = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return operation(attempt)
+        except RecordHeldError as exc:
+            last = exc
+            if attempt < attempts and before_retry is not None:
+                before_retry(attempt, exc)
+    raise RetryBudgetExhausted(attempts, last)
+
+
+class WaitTicket:
+    """An operation parked in the hold queue (``AdabasSim.submit``).
+
+    ``done`` becomes true when the operation returned (``result``) or was
+    abandoned (``error``: ``HoldTimeoutError`` or ``DeadlockError``);
+    ``waits`` counts how often it was parked; ``attempts`` how often it ran.
+    """
+
+    def __init__(self, session, operation):
+        self.session = session
+        self.operation = operation
+        self.key = None
+        self.result = None
+        self.error = None
+        self.done = False
+        self.waits = 0
+        self.attempts = 0
+
 
 class AdabasFile:
     def __init__(self, name):
         self.name = name
         self.records = {}
         self._next_isn = 1
+        self._sequence = None
 
     def load(self, rows):
         for row in rows:
@@ -37,6 +123,16 @@ class AdabasFile:
         self.records[isn] = dict(row)
         return isn
 
+    def next_id(self, field):
+        """Platform-generated identifier: a sequence seeded from the current
+        maximum of ``field``. Not transactional (a backout leaves a gap),
+        exactly like a database sequence."""
+        if self._sequence is None:
+            self._sequence = max(
+                (rec[field] for rec in self.records.values()), default=0)
+        self._sequence += 1
+        return self._sequence
+
 
 class Session:
     """One Natural user session with its own transaction and hold state."""
@@ -47,6 +143,7 @@ class Session:
         self.holds = set()
         self._pending_updates = {}
         self._pending_stores = []
+        self._pending_requests = []
 
     # -- reads ---------------------------------------------------------
 
@@ -76,11 +173,20 @@ class Session:
         key = (file_name, isn)
         owner = self.db.hold_table.get(key)
         if owner is not None and owner is not self:
-            raise RecordHeldError(
-                f"{key} held by {owner.name}, requested by {self.name}"
-            )
+            raise RecordHeldError(key, owner, self)
         self.db.hold_table[key] = self
         self.holds.add(key)
+
+    def release(self, file_name, isn):
+        """Give up one hold without ending the transaction (no ADABAS
+        statement does this for a single record; used by ``update_if`` to
+        model a guard failure that leaves nothing behind)."""
+        key = (file_name, isn)
+        if self.db.hold_table.get(key) is self:
+            del self.db.hold_table[key]
+        self.holds.discard(key)
+        self._pending_updates.pop(key, None)
+        self.db._release(key)
 
     def get_held(self, file_name, isn):
         """Re-read a record's current committed value while holding it."""
@@ -96,6 +202,57 @@ class Session:
         """STORE: buffer a new record until ET."""
         self._pending_stores.append((file_name, dict(row)))
 
+    # -- retry-architecture primitives ----------------------------------
+
+    def update_if(self, file_name, isn, field, expected, new_values):
+        """Compare-and-swap: apply ``new_values`` only if the committed value
+        of ``field`` still equals ``expected``.
+
+        Returns True and leaves the record held (until ET/BT) on success;
+        returns False and leaves no hold behind when the guard fails. May
+        raise ``RecordHeldError`` while acquiring the hold, like any UPDATE.
+        """
+        key = (file_name, isn)
+        newly_held = key not in self.holds
+        self.hold(file_name, isn)
+        if self.db.files[file_name].records[isn][field] != expected:
+            if newly_held:
+                self.release(file_name, isn)
+            return False
+        self._pending_updates.setdefault(key, {}).update(new_values)
+        return True
+
+    def decrement_if_positive(self, file_name, isn, field):
+        """Atomic conditional decrement of a numeric-in-alpha counter
+        (``UPDATE ... SET f = f - 1 WHERE f > 0`` on a relational target).
+
+        Returns the new value, or None when the counter was already zero
+        (in which case no hold is left behind). Contention on the row is
+        still a hold conflict, as it is a row lock on a relational engine.
+        """
+        key = (file_name, isn)
+        newly_held = key not in self.holds
+        self.hold(file_name, isn)
+        current = int(self.db.files[file_name].records[isn][field])
+        if current <= 0:
+            if newly_held:
+                self.release(file_name, isn)
+            return None
+        self._pending_updates.setdefault(key, {})[field] = str(current - 1)
+        return current - 1
+
+    def next_id(self, file_name, field):
+        """Platform-generated identifier for ``file_name`` (option 4)."""
+        return self.db.files[file_name].next_id(field)
+
+    def record_request(self, request_id, payload):
+        """Buffer an idempotency-ledger entry that commits with the ET."""
+        self._pending_requests.append((request_id, payload))
+
+    def completed_request(self, request_id):
+        """The committed outcome of ``request_id``, or None."""
+        return self.db.request_ledger.get(request_id)
+
     # -- transaction end -----------------------------------------------
 
     def et(self):
@@ -104,25 +261,47 @@ class Session:
             self.db.files[file_name].records[isn].update(values)
         for file_name, row in self._pending_stores:
             self.db.files[file_name].insert(row)
+        for request_id, payload in self._pending_requests:
+            self.db.request_ledger[request_id] = payload
+        self.db.et_count += 1
         self._reset()
 
     def backout(self):
         """BACKOUT TRANSACTION: discard buffered changes, release holds."""
+        self.db.bt_count += 1
         self._reset()
 
     def _reset(self):
         self._pending_updates = {}
         self._pending_stores = []
+        self._pending_requests = []
+        released = []
         for key in self.holds:
             if self.db.hold_table.get(key) is self:
                 del self.db.hold_table[key]
+                released.append(key)
         self.holds = set()
+        for key in released:
+            self.db._release(key)
 
 
 class AdabasSim:
-    def __init__(self):
+    """The nucleus: files, the hold table and (optionally) a hold queue.
+
+    ``wait_limit`` bounds how often a parked operation may be re-parked
+    before it is abandoned with ``HoldTimeoutError`` (None = wait forever,
+    0 = never wait, i.e. the ADABAS "return immediately" hold option).
+    """
+
+    def __init__(self, wait_limit=None):
         self.files = {}
         self.hold_table = {}
+        self.hold_queue = {}
+        self.wait_limit = wait_limit
+        self.request_ledger = {}
+        self.et_count = 0
+        self.bt_count = 0
+        self._parked = {}
 
     def add_file(self, name, rows=()):
         f = AdabasFile(name)
@@ -132,3 +311,74 @@ class AdabasSim:
 
     def session(self, name="user"):
         return Session(self, name)
+
+    # -- hold-queue mode -----------------------------------------------
+
+    def submit(self, session, operation):
+        """Run ``operation()`` for ``session`` in hold-queue mode.
+
+        If the operation raises ``RecordHeldError`` it is parked on the
+        contested record and re-driven when the holder ends its
+        transaction; the returned ``WaitTicket`` reports the outcome.
+        The parked session keeps whatever holds it already owns (as a real
+        session waiting in the hold queue does), which is why a wait cycle
+        is possible and is detected as ``DeadlockError``.
+        """
+        ticket = WaitTicket(session, operation)
+        self._drive(ticket)
+        return ticket
+
+    def waiting(self):
+        """Tickets currently parked, in queue order."""
+        return [t for waiters in self.hold_queue.values() for t in waiters]
+
+    def _drive(self, ticket):
+        ticket.attempts += 1
+        try:
+            ticket.result = ticket.operation()
+        except RecordHeldError as exc:
+            self._park(ticket, exc)
+            return
+        ticket.done = True
+
+    def _park(self, ticket, exc):
+        if self.wait_limit is not None and ticket.waits >= self.wait_limit:
+            self._abandon(ticket, HoldTimeoutError(
+                exc.key, exc.holder, exc.requester))
+            return
+        if self._would_deadlock(ticket.session, exc.holder):
+            self._abandon(ticket, DeadlockError(
+                exc.key, exc.holder, exc.requester))
+            return
+        ticket.waits += 1
+        ticket.key = exc.key
+        self.hold_queue.setdefault(exc.key, []).append(ticket)
+        self._parked[ticket.session] = ticket
+
+    def _abandon(self, ticket, error):
+        ticket.error = error
+        ticket.done = True
+        ticket.session.backout()
+
+    def _would_deadlock(self, session, holder):
+        """Follow the wait-for chain from ``holder``; a path back to
+        ``session`` means parking it would close a cycle."""
+        seen = set()
+        current = holder
+        while current is not None and current not in seen:
+            if current is session:
+                return True
+            seen.add(current)
+            parked = self._parked.get(current)
+            if parked is None:
+                return False
+            current = self.hold_table.get(parked.key)
+        return False
+
+    def _release(self, key):
+        waiters = self.hold_queue.pop(key, [])
+        for ticket in waiters:
+            self._parked.pop(ticket.session, None)
+            ticket.key = None
+        for ticket in waiters:
+            self._drive(ticket)

@@ -1,0 +1,655 @@
+"""Retry / wait re-architecture tests for the CONEW-N booking transaction.
+
+Companion to ``tests/test_concurrency.py``: that module proves the current
+hold-and-wait refactor is safe; this module makes the target-state options
+of ``docs/retry-rearchitecture.md`` executable and proves, for each, that
+booking integrity survives contention:
+
+* option 1 - hold-queue wait/resume with a bounded wait (``AdabasSim.submit``)
+* option 2 - optimistic compare-and-swap with bounded retry (``conew_optimistic``)
+* option 3 - application-level BT + re-drive (``conew_with_retry``)
+* options 4+5 - atomic decrement + platform identifier (``conew_target_state``)
+
+Interleavings are deterministic. A competitor "in the middle of its
+transaction" is modelled with ``begin_booking`` (held GET + buffered
+decrement, CONEW-N lines 79-92) and completed with ``commit_booking``
+(STORE + ET, lines 114-118); the retrying session's ``before_retry`` hook is
+the moment at which the competitor finishes.
+"""
+
+import unittest
+
+from tests.harness import natural_model as nm
+from tests.harness.adabas_sim import (
+    DeadlockError,
+    HoldTimeoutError,
+    RecordHeldError,
+    RetryBudgetExhausted,
+    retry_on_hold,
+)
+from tests.harness.fixtures import make_db
+
+
+class AbendError(RuntimeError):
+    """Stands in for a Natural runtime error (NATnnnn) raised mid-program."""
+
+
+def cruise_isn(db, cruise_id=196):
+    return db.session("probe").find("NCCRUISE", "CRUISE-ID", cruise_id)[0][0]
+
+
+def cruise_status(db, cruise_id=196):
+    return db.session("probe").find(
+        "NCCRUISE", "CRUISE-ID", cruise_id)[0][1]["CRUISE-STATUS"]
+
+
+def contracts_for(db, cruise_id):
+    return [rec for rec in db.files["NCCONTRACT"].records.values()
+            if rec["ID-CRUISE"] == cruise_id]
+
+
+def contract_ids(db):
+    return [rec["CONTRACT-ID"] for rec in db.files["NCCONTRACT"].records.values()]
+
+
+def begin_booking(session, cruise_id=196, hold_top_contract=False):
+    """Competitor between its held GET and its ET (CONEW-N lines 79-102)."""
+    isn, _ = session.find("NCCRUISE", "CRUISE-ID", cruise_id)[0]
+    held = session.get_held("NCCRUISE", isn)
+    session.update("NCCRUISE", isn,
+                   {"CRUISE-STATUS": str(int(held["CRUISE-STATUS"]) - 1)})
+    if hold_top_contract:
+        top_isn, _ = session.read_descending(
+            "NCCONTRACT", "CONTRACT-ID", limit=1)[0]
+        session.update("NCCONTRACT", top_isn, {})  # fake update -> hold
+    return isn
+
+
+def commit_booking(session, cruise_id=196, customer_id=10000001):
+    """Competitor's STORE NCCONTRACT + END TRANSACTION (lines 114-118)."""
+    top_isn, top = session.read_descending(
+        "NCCONTRACT", "CONTRACT-ID", limit=1)[0]
+    session.update("NCCONTRACT", top_isn, {})
+    session.store("NCCONTRACT", {
+        "CONTRACT-ID": top["CONTRACT-ID"] + 1,
+        "PRICE": 0.0,
+        "DATE-BOOKING": 20260820,
+        "ID-CRUISE": cruise_id,
+        "ID-CUSTOMER": customer_id,
+    })
+    session.et()
+
+
+class BoundedRetryTests(unittest.TestCase):
+    """Option 3: BT + re-drive around conew_refactored (conew_with_retry)."""
+
+    def test_loser_retries_after_commit_and_gets_9902_for_last_place(self):
+        """Two sessions contend for the last place. The loser's first
+        attempt meets the hold, backs out, and its retry (after the winner's
+        ET) sees CRUISE-STATUS=0 -> 9902. Exactly one booking exists."""
+        db = make_db(cruise_status="1")
+        user1, user2 = db.session("user1"), db.session("user2")
+        begin_booking(user1)
+
+        second = nm.conew_with_retry(
+            user2, "10000002", "196", attempts=3,
+            before_retry=lambda attempt, err: commit_booking(user1))
+
+        self.assertEqual((second.msg_nr, second.rsp_code), (9902, 9902))
+        self.assertEqual(second.attempts, 2)
+        self.assertEqual(len(contracts_for(db, 196)), 1)
+        self.assertEqual(cruise_status(db), "0")
+        self.assertEqual(db.hold_table, {})
+
+    def test_retry_succeeds_when_capacity_remains_after_commit(self):
+        db = make_db(cruise_status="2")
+        user1, user2 = db.session("user1"), db.session("user2")
+        begin_booking(user1)
+
+        second = nm.conew_with_retry(
+            user2, "10000002", "196", attempts=3,
+            before_retry=lambda attempt, err: commit_booking(user1))
+
+        self.assertEqual((second.msg_nr, second.rsp_code), (9800, 0))
+        self.assertEqual(second.attempts, 2)
+        self.assertEqual(second.new_contract_id, 500102)
+        self.assertEqual(cruise_status(db), "0")
+        self.assertEqual(len(contracts_for(db, 196)), 2)
+        self.assertEqual(len(contract_ids(db)), len(set(contract_ids(db))))
+
+    def test_budget_exhausted_under_sustained_contention_is_defined(self):
+        """The competitor never releases: every attempt hits the hold. The
+        caller gets a defined code, not an exception, and nothing of the
+        loser's work survives (no hold, no decrement, no contract)."""
+        db = make_db(cruise_status="1")
+        user1, user2 = db.session("user1"), db.session("user2")
+        begin_booking(user1)
+        seen = []
+
+        second = nm.conew_with_retry(
+            user2, "10000002", "196", attempts=3,
+            before_retry=lambda attempt, err: seen.append(
+                (attempt, type(err))))
+
+        self.assertEqual((second.msg_nr, second.rsp_code), (9902, 9902))
+        self.assertEqual(second.attempts, 3)
+        self.assertEqual(seen, [(1, RecordHeldError), (2, RecordHeldError)])
+        self.assertEqual(db.bt_count, 3)  # one BACKOUT per failed attempt
+        self.assertEqual(user2.holds, set())
+        self.assertEqual(list(db.hold_table.values()), [user1])
+        self.assertEqual(cruise_status(db), "1")  # user1 has not committed
+        self.assertEqual(contracts_for(db, 196), [])
+
+    def test_exhaustion_can_opt_into_distinct_target_state_code(self):
+        db = make_db(cruise_status="1")
+        user1, user2 = db.session("user1"), db.session("user2")
+        begin_booking(user1)
+
+        second = nm.conew_with_retry(user2, "10000002", "196", attempts=2,
+                                     exhausted_msg=nm.MSG_BOOKING_BUSY)
+
+        self.assertEqual(second.msg_nr, 9936)
+        self.assertEqual(second.rsp_code, 9936)  # passes through CAMSG-N
+        self.assertEqual(second.attempts, 2)
+        self.assertNotIn(9936, nm.CAMSG_TEXT_EN)  # not a production code
+
+    def test_maxid_contention_never_duplicates_contract_ids(self):
+        """user1 holds the highest NCCONTRACT record (BR-007 fake UPDATE)
+        on a different cruise; user2's retry after user1's ET computes
+        MAX+1 from the committed 500101 -> 500102."""
+        db = make_db(cruise_status="5")
+        user1, user2 = db.session("user1"), db.session("user2")
+        begin_booking(user1, cruise_id=196, hold_top_contract=True)
+
+        second = nm.conew_with_retry(
+            user2, "10000002", "1484", attempts=3,
+            before_retry=lambda attempt, err: commit_booking(user1))
+
+        self.assertEqual(second.msg_nr, 9800)
+        self.assertEqual(second.attempts, 2)
+        self.assertEqual(second.new_contract_id, 500102)
+        self.assertEqual(sorted(contract_ids(db)), [500100, 500101, 500102])
+        self.assertEqual(cruise_status(db, 1484), "2")
+
+    def test_backout_on_retry_leaves_no_dangling_state(self):
+        """Between attempts the loser owns no hold and has nothing
+        buffered; after it gives up the cruise record is untouched."""
+        db = make_db(cruise_status="1")
+        user1, user2 = db.session("user1"), db.session("user2")
+        cruise_key = ("NCCRUISE", begin_booking(user1))
+        snapshots = []
+
+        def inspect(attempt, err):
+            snapshots.append((
+                err.key, err.holder.name,
+                set(user2.holds), dict(db.hold_table),
+                user2._pending_updates, user2._pending_stores,
+            ))
+
+        second = nm.conew_with_retry(user2, "10000002", "196", attempts=2,
+                                     before_retry=inspect)
+
+        self.assertEqual(second.msg_nr, 9902)
+        self.assertEqual(snapshots, [
+            (cruise_key, "user1", set(), {cruise_key: user1}, {}, []),
+        ])
+        self.assertEqual(cruise_status(db), "1")
+        self.assertEqual(contracts_for(db, 196), [])
+        user1.backout()  # abandoned competitor
+        self.assertEqual(db.hold_table, {})
+        self.assertEqual(cruise_status(db), "1")
+
+    def test_abend_mid_retry_backs_out_cleanly(self):
+        """Attempt 1 meets the hold; the competitor commits; attempt 2 gets
+        past the status check and abends (ON ERROR). The abend propagates,
+        BACKOUT TRANSACTION has released every hold and discarded the
+        decrement and the store."""
+        db = make_db(cruise_status="3")
+        user1, user2 = db.session("user1"), db.session("user2")
+        begin_booking(user1)
+        calls = {"maxid": 0}
+
+        def abend_on_second_pass():
+            calls["maxid"] += 1
+            if calls["maxid"] == 1:
+                raise AbendError("NAT0954 abnormal termination")
+
+        hooks = nm.Hooks(after_maxid_read=abend_on_second_pass)
+        with self.assertRaises(AbendError):
+            nm.conew_with_retry(
+                user2, "10000002", "196", hooks=hooks, attempts=3,
+                before_retry=lambda attempt, err: commit_booking(user1))
+
+        self.assertEqual(db.hold_table, {})
+        self.assertEqual(user2._pending_updates, {})
+        self.assertEqual(user2._pending_stores, [])
+        self.assertEqual(cruise_status(db), "2")  # only user1's decrement
+        self.assertEqual(len(contracts_for(db, 196)), 1)
+        self.assertEqual(db.bt_count, 2)  # attempt-1 conflict + ON ERROR
+
+    def test_completed_attempt_is_never_redriven(self):
+        """retry_on_hold treats any returned value as terminal."""
+        calls = []
+
+        def operation(attempt):
+            calls.append(attempt)
+            return "committed"
+
+        self.assertEqual(retry_on_hold(operation, attempts=5), "committed")
+        self.assertEqual(calls, [1])
+
+    def test_redrive_with_same_request_id_replays_committed_outcome(self):
+        """A caller that lost the response and re-drives the same request
+        gets the committed contract back: one decrement, one contract."""
+        db = make_db(cruise_status="2")
+        user2 = db.session("user2")
+
+        first = nm.conew_with_retry(user2, "10000002", "196",
+                                    request_id="req-42")
+        again = nm.conew_with_retry(user2, "10000002", "196",
+                                    request_id="req-42")
+
+        self.assertEqual((first.msg_nr, first.replayed), (9800, False))
+        self.assertEqual((again.msg_nr, again.replayed), (9800, True))
+        self.assertEqual(again.new_contract_id, first.new_contract_id)
+        self.assertEqual(cruise_status(db), "1")
+        self.assertEqual(len(contracts_for(db, 196)), 1)
+        self.assertEqual(db.et_count, 1)
+
+    def test_failed_request_is_not_recorded_and_can_be_redriven(self):
+        db = make_db(cruise_status="1")
+        user1, user2 = db.session("user1"), db.session("user2")
+        begin_booking(user1)
+
+        first = nm.conew_with_retry(user2, "10000002", "196", attempts=1,
+                                    request_id="req-7")
+        self.assertEqual(first.msg_nr, 9902)
+        self.assertIsNone(user2.completed_request("req-7"))
+        user1.backout()  # competitor abandons: capacity comes back
+
+        second = nm.conew_with_retry(user2, "10000002", "196", attempts=1,
+                                     request_id="req-7")
+        self.assertEqual((second.msg_nr, second.replayed), (9800, False))
+        self.assertEqual(cruise_status(db), "0")
+
+    def test_customer_not_found_during_retry_still_backs_out(self):
+        """BR-010 is unchanged by the retry wrapper: 9918 after a retry
+        still discards the buffered decrement."""
+        db = make_db(cruise_status="2")
+        user1, user2 = db.session("user1"), db.session("user2")
+        begin_booking(user1)
+
+        second = nm.conew_with_retry(
+            user2, "99999999", "196", attempts=3,
+            before_retry=lambda attempt, err: commit_booking(user1))
+
+        self.assertEqual(second.msg_nr, 9918)
+        self.assertEqual(second.attempts, 2)
+        self.assertEqual(cruise_status(db), "1")  # only user1's decrement
+        self.assertEqual(db.hold_table, {})
+
+
+class HoldQueueWaitTests(unittest.TestCase):
+    """Option 1: wait in the hold queue, resume at the holder's ET/BT."""
+
+    def test_waiter_resumes_at_holders_et_and_gets_9902_for_last_place(self):
+        db = make_db(cruise_status="1")
+        user2 = db.session("user2")
+        tickets = []
+
+        def competitor_books_at_same_time():
+            tickets.append(db.submit(
+                user2, lambda: nm.conew_refactored(user2, "10000002", "196")))
+            self.assertFalse(tickets[0].done)  # parked, not failed
+
+        user1 = db.session("user1")
+        hooks = nm.Hooks(after_status_read=competitor_books_at_same_time)
+        first = nm.conew_refactored(user1, "10000001", "196", hooks=hooks)
+
+        self.assertEqual(first.msg_nr, 9800)
+        ticket = tickets[0]
+        self.assertTrue(ticket.done)  # re-driven inside user1's ET
+        self.assertEqual((ticket.waits, ticket.attempts), (1, 2))
+        self.assertEqual(nm.booking_outcome(ticket).msg_nr, 9902)
+        self.assertEqual(len(contracts_for(db, 196)), 1)
+        self.assertEqual(db.hold_table, {})
+        self.assertEqual(db.waiting(), [])
+
+    def test_waiter_succeeds_when_capacity_remains(self):
+        db = make_db(cruise_status="2")
+        user2 = db.session("user2")
+        tickets = []
+        user1 = db.session("user1")
+        hooks = nm.Hooks(after_status_read=lambda: tickets.append(db.submit(
+            user2, lambda: nm.conew_refactored(user2, "10000002", "196"))))
+
+        first = nm.conew_refactored(user1, "10000001", "196", hooks=hooks)
+        second = nm.booking_outcome(tickets[0])
+
+        self.assertEqual((first.msg_nr, second.msg_nr), (9800, 9800))
+        self.assertEqual(sorted((first.new_contract_id,
+                                 second.new_contract_id)), [500101, 500102])
+        self.assertEqual(cruise_status(db), "0")
+
+    def test_wait_limit_zero_translates_to_defined_code(self):
+        """The ADABAS "return immediately" hold option / a hold-queue
+        timeout: no waiting, a defined message code instead of an abend."""
+        db = make_db(cruise_status="1", wait_limit=0)
+        user1, user2 = db.session("user1"), db.session("user2")
+        begin_booking(user1)
+
+        ticket = db.submit(
+            user2, lambda: nm.conew_refactored(user2, "10000002", "196"))
+
+        self.assertIsInstance(ticket.error, HoldTimeoutError)
+        self.assertEqual(ticket.error.holder, user1)
+        self.assertEqual(nm.booking_outcome(ticket).msg_nr, 9902)
+        self.assertEqual(
+            nm.booking_outcome(ticket, nm.MSG_BOOKING_BUSY).msg_nr, 9936)
+        self.assertEqual(user2.holds, set())
+        self.assertEqual(db.waiting(), [])
+
+    def test_bounded_wait_gives_up_after_repeated_reparking(self):
+        """The waiter needs both hotspots and keeps meeting a holder: parked
+        on the cruise (user1), then on the highest contract (user3), then
+        on the cruise again (re-taken by user1). The third conflict exceeds
+        wait_limit=2 and the booking is abandoned with a defined outcome."""
+        db = make_db(cruise_status="1", wait_limit=2)
+        user1, user2, user3 = (db.session("user1"), db.session("user2"),
+                               db.session("user3"))
+        isn = begin_booking(user1)
+        top_isn, _ = user3.read_descending("NCCONTRACT", "CONTRACT-ID",
+                                           limit=1)[0]
+        user3.update("NCCONTRACT", top_isn, {})
+
+        ticket = db.submit(
+            user2, lambda: nm.conew_refactored(user2, "10000002", "196"))
+        self.assertEqual((ticket.waits, ticket.key), (1, ("NCCRUISE", isn)))
+
+        user1.backout()  # user2 resumes, takes the cruise, meets user3
+        self.assertFalse(ticket.done)
+        self.assertEqual((ticket.waits, ticket.key),
+                         (2, ("NCCONTRACT", top_isn)))
+        self.assertEqual(user2.holds, set())  # released before re-parking
+
+        user1.get_held("NCCRUISE", isn)  # cruise taken again meanwhile
+        user3.backout()  # user2 resumes, meets user1: third conflict
+
+        self.assertIsInstance(ticket.error, HoldTimeoutError)
+        self.assertEqual((ticket.waits, ticket.attempts), (2, 3))
+        self.assertEqual(nm.booking_outcome(ticket).msg_nr, 9902)
+        self.assertEqual(cruise_status(db), "1")
+        self.assertEqual(contracts_for(db, 196), [])
+        user1.backout()
+        self.assertEqual(db.hold_table, {})
+        self.assertEqual(db.waiting(), [])
+
+    def test_fifo_hold_queue_is_fair_and_starvation_free(self):
+        """Three waiters on the last two places resume in arrival order:
+        the first two book, the third gets 9902, nobody is left parked."""
+        db = make_db(cruise_status="2")
+        user1 = db.session("user1")
+        begin_booking(user1)
+        waiters = [db.session(f"user{i}") for i in (2, 3, 4)]
+        order = []
+
+        def booking(session):
+            def run():
+                order.append(session.name)
+                return nm.conew_refactored(session, "10000002", "196")
+            return run
+
+        tickets = [db.submit(s, booking(s)) for s in waiters]
+        self.assertEqual([t.done for t in tickets], [False] * 3)
+        self.assertEqual(order, ["user2", "user3", "user4"])
+
+        user1.backout()  # abandons its place: capacity 2 is back
+
+        self.assertEqual([t.done for t in tickets], [True] * 3)
+        self.assertEqual(order[3:], ["user2", "user3", "user4"])
+        self.assertEqual([nm.booking_outcome(t).msg_nr for t in tickets],
+                         [9800, 9800, 9902])
+        self.assertEqual(cruise_status(db), "0")
+        self.assertEqual(db.hold_table, {})
+        self.assertEqual(db.waiting(), [])
+
+    def test_interleaved_cruise_and_contract_holds_resolve(self):
+        """user1 holds both hotspots (cruise 196 + highest contract). user2
+        (cruise 1484) parks on the contract record, user3 (cruise 196) on
+        the cruise record. user1's ET releases both; each waiter resumes,
+        no hold is left, and every CONTRACT-ID is unique."""
+        db = make_db(cruise_status="5")
+        user2, user3 = db.session("user2"), db.session("user3")
+        tickets = {}
+
+        def others_arrive():
+            tickets["u2"] = db.submit(
+                user2, lambda: nm.conew_refactored(user2, "10000002", "1484"))
+            tickets["u3"] = db.submit(
+                user3, lambda: nm.conew_refactored(user3, "10000002", "196"))
+            self.assertEqual([t.key[0] for t in db.waiting()],
+                             ["NCCONTRACT", "NCCRUISE"])
+
+        user1 = db.session("user1")
+        hooks = nm.Hooks(after_maxid_read=others_arrive)
+        first = nm.conew_refactored(user1, "10000001", "196", hooks=hooks)
+
+        outcomes = [first] + [nm.booking_outcome(tickets[k])
+                              for k in ("u2", "u3")]
+        self.assertEqual([o.msg_nr for o in outcomes], [9800] * 3)
+        self.assertEqual(sorted(o.new_contract_id for o in outcomes),
+                         [500101, 500102, 500103])
+        self.assertEqual(db.hold_table, {})
+        self.assertEqual(db.waiting(), [])
+        self.assertEqual(cruise_status(db, 196), "3")
+        self.assertEqual(cruise_status(db, 1484), "2")
+
+    def test_wait_for_cycle_is_detected_instead_of_blocking_forever(self):
+        """Pure hold-and-wait failure mode: two raw sessions each hold one
+        record and wait for the other's. The simulator refuses to close the
+        cycle; the victim is backed out and the survivor resumes."""
+        db = make_db()
+        a, b = db.session("A"), db.session("B")
+        cruise, contract = ("NCCRUISE", 1), ("NCCONTRACT", 1)
+        a.hold(*cruise)
+        b.hold(*contract)
+
+        ta = db.submit(a, lambda: a.hold(*contract))  # A parks, keeps cruise
+        self.assertFalse(ta.done)
+        tb = db.submit(b, lambda: b.hold(*cruise))    # would close the cycle
+
+        self.assertIsInstance(tb.error, DeadlockError)
+        self.assertTrue(ta.done and ta.error is None)  # A got the contract
+        self.assertEqual(set(db.hold_table), {cruise, contract})
+        self.assertEqual(set(db.hold_table.values()), {a})
+        a.backout()
+        self.assertEqual(db.hold_table, {})
+
+    def test_model_releases_before_waiting_so_no_cycle_forms(self):
+        """conew_refactored backs out before it surfaces a hold conflict,
+        so two bookings that need each other's records can never deadlock:
+        the second one waits with empty hands and resumes after the first."""
+        db = make_db(cruise_status="5")
+        user2 = db.session("user2")
+        tickets = []
+
+        def competitor_holds_the_other_hotspot():
+            tickets.append(db.submit(
+                user2, lambda: nm.conew_refactored(user2, "10000002", "1484")))
+            self.assertEqual(user2.holds, set())  # parked without holds
+
+        user1 = db.session("user1")
+        hooks = nm.Hooks(after_maxid_read=competitor_holds_the_other_hotspot)
+        first = nm.conew_refactored(user1, "10000001", "196", hooks=hooks)
+
+        self.assertEqual(first.msg_nr, 9800)
+        self.assertIsNone(tickets[0].error)
+        self.assertEqual(tickets[0].result.msg_nr, 9800)
+
+
+class OptimisticRetryTests(unittest.TestCase):
+    """Option 2: compare-and-swap on CRUISE-STATUS with a retry cap."""
+
+    def test_stale_guard_retries_and_gets_9902_for_last_place(self):
+        """Both sessions read CRUISE-STATUS=1 without hold. The competitor
+        commits first; the swap guarded by '1' fails, the re-read sees '0'
+        -> 9902 on attempt 2. No overbooking."""
+        db = make_db(cruise_status="1")
+        user2 = db.session("user2")
+        results = []
+
+        def competitor_commits_between_read_and_swap():
+            if not results:
+                results.append(nm.conew_refactored(user2, "10000002", "196"))
+
+        user1 = db.session("user1")
+        hooks = nm.Hooks(
+            after_status_read=competitor_commits_between_read_and_swap)
+        first = nm.conew_optimistic(user1, "10000001", "196", hooks=hooks)
+
+        self.assertEqual(results[0].msg_nr, 9800)
+        self.assertEqual((first.msg_nr, first.attempts), (9902, 2))
+        self.assertEqual(len(contracts_for(db, 196)), 1)
+        self.assertEqual(cruise_status(db), "0")
+        self.assertEqual(db.hold_table, {})
+
+    def test_stale_guard_retries_and_succeeds_when_capacity_remains(self):
+        db = make_db(cruise_status="2")
+        user2 = db.session("user2")
+        results = []
+
+        def competitor_commits_once():
+            if not results:
+                results.append(nm.conew_refactored(user2, "10000002", "196"))
+
+        user1 = db.session("user1")
+        hooks = nm.Hooks(after_status_read=competitor_commits_once)
+        first = nm.conew_optimistic(user1, "10000001", "196", hooks=hooks)
+
+        self.assertEqual((first.msg_nr, first.attempts), (9800, 2))
+        self.assertEqual(sorted((first.new_contract_id,
+                                 results[0].new_contract_id)),
+                         [500101, 500102])
+        self.assertEqual(cruise_status(db), "0")
+
+    def test_retry_cap_under_sustained_contention_returns_9902(self):
+        """A competitor commits between every read and swap: after the cap
+        the caller gets 9902, capacity reflects only the competitor's
+        bookings and no hold or buffered decrement remains."""
+        db = make_db(cruise_status="5")
+        user2 = db.session("user2")
+        user1 = db.session("user1")
+        hooks = nm.Hooks(after_status_read=lambda: nm.conew_refactored(
+            user2, "10000002", "196"))
+
+        first = nm.conew_optimistic(user1, "10000001", "196", hooks=hooks,
+                                    attempts=3)
+
+        self.assertEqual((first.msg_nr, first.rsp_code), (9902, 9902))
+        self.assertEqual(first.attempts, 3)
+        self.assertEqual(cruise_status(db), "2")  # 3 competitor bookings
+        self.assertEqual(len(contracts_for(db, 196)), 3)
+        self.assertEqual(db.hold_table, {})
+        self.assertEqual(user1._pending_updates, {})
+
+    def test_hold_conflict_during_swap_counts_as_a_retry(self):
+        """Attempt 1: the swap meets user1's hold. Attempt 2: user1 commits
+        after the unheld read, so the guard is stale. Attempt 3 swaps."""
+        db = make_db(cruise_status="3")
+        user1, user2 = db.session("user1"), db.session("user2")
+        begin_booking(user1)
+        passes = []
+
+        def competitor_finishes_after_first_conflict():
+            passes.append(len(passes) + 1)
+            if len(passes) == 2:
+                commit_booking(user1)
+
+        hooks = nm.Hooks(
+            after_status_read=competitor_finishes_after_first_conflict)
+        first = nm.conew_optimistic(user2, "10000002", "196", hooks=hooks,
+                                    attempts=3)
+
+        self.assertEqual((first.msg_nr, first.attempts), (9800, 3))
+        self.assertEqual(cruise_status(db), "1")
+        self.assertEqual(sorted(contract_ids(db)), [500100, 500101, 500102])
+        self.assertEqual(db.hold_table, {})
+
+
+class TargetStateTests(unittest.TestCase):
+    """Options 4 + 5: atomic conditional decrement + platform identifier."""
+
+    def test_atomic_decrement_never_goes_negative(self):
+        db = make_db(cruise_status="1")
+        outcomes = [
+            nm.conew_target_state(db.session(f"user{i}"), "10000001", "196")
+            for i in range(3)
+        ]
+        self.assertEqual([o.msg_nr for o in outcomes], [9800, 9902, 9902])
+        self.assertEqual(cruise_status(db), "0")
+        self.assertEqual(db.hold_table, {})
+
+    def test_sequence_ids_remove_the_contract_hotspot(self):
+        """user2 books a different cruise while user1 is between its id
+        allocation and its ET: no NCCONTRACT hold exists to wait for, so
+        user2 completes immediately and both ids are distinct."""
+        db = make_db(cruise_status="5")
+        user2 = db.session("user2")
+        results = []
+        user1 = db.session("user1")
+        hooks = nm.Hooks(after_maxid_read=lambda: results.append(
+            nm.conew_target_state(user2, "10000002", "1484")))
+
+        first = nm.conew_target_state(user1, "10000001", "196", hooks=hooks)
+
+        self.assertEqual((first.msg_nr, results[0].msg_nr), (9800, 9800))
+        self.assertEqual((first.new_contract_id, results[0].new_contract_id),
+                         (500101, 500102))
+        self.assertEqual(len(contract_ids(db)), len(set(contract_ids(db))))
+
+    def test_capacity_contention_resolves_via_lock_wait(self):
+        """The one remaining hotspot (the cruise row) is resolved by the
+        platform's lock wait: the waiter resumes at ET and sees 0 -> 9902."""
+        db = make_db(cruise_status="1")
+        user2 = db.session("user2")
+        tickets = []
+        user1 = db.session("user1")
+        hooks = nm.Hooks(after_status_read=lambda: tickets.append(db.submit(
+            user2, lambda: nm.conew_target_state(user2, "10000002", "196"))))
+
+        first = nm.conew_target_state(user1, "10000001", "196", hooks=hooks)
+
+        self.assertEqual(first.msg_nr, 9800)
+        self.assertEqual(nm.booking_outcome(tickets[0]).msg_nr, 9902)
+        self.assertEqual(len(contracts_for(db, 196)), 1)
+        self.assertEqual(db.hold_table, {})
+
+    def test_bounded_redrive_of_target_state_is_defined_on_exhaustion(self):
+        db = make_db(cruise_status="1")
+        user1, user2 = db.session("user1"), db.session("user2")
+        begin_booking(user1)
+
+        with self.assertRaises(RetryBudgetExhausted) as ctx:
+            retry_on_hold(lambda attempt: nm.conew_target_state(
+                user2, "10000002", "196"), attempts=2)
+
+        self.assertEqual(ctx.exception.attempts, 2)
+        self.assertEqual(user2.holds, set())
+        self.assertEqual(cruise_status(db), "1")
+
+    def test_customer_not_found_and_sold_out_codes_are_preserved(self):
+        db = make_db(cruise_status="1")
+        s = db.session()
+        self.assertEqual(nm.conew_target_state(s, "99999999", "196").msg_nr,
+                         9918)
+        self.assertEqual(nm.conew_target_state(s, "", "196").msg_nr, 9904)
+        self.assertEqual(nm.conew_target_state(s, "10000001", "").msg_nr,
+                         9905)
+        self.assertEqual(nm.conew_target_state(s, "10000001", "696").msg_nr,
+                         9902)
+        self.assertEqual(cruise_status(db), "1")
+        self.assertEqual(db.hold_table, {})
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,344 @@
+# CONEW-N Retry / Concurrency Re-architecture
+
+`CONEW-N` (library `CRUISE16`) has two race points, both closed today by
+**hold-and-wait** (see [concurrency-refactor.md](concurrency-refactor.md)):
+
+| # | Race point | Current-state protection | Rule |
+|---|------------|--------------------------|------|
+| R1 | Decrement of `NCCRUISE.CRUISE-STATUS` | `GET NCCRUISE *ISN(R1.)` re-reads the record in hold; `UPDATE (G1.)` writes the buffered decrement (`CONEW-N.NSN:79-92`) | BR-006 |
+| R2 | `NCCONTRACT.CONTRACT-ID` = MAX+1 | "fake" `UPDATE (R2.)` inside `READ (1) ... DESCENDING` holds the highest contract while the id is computed (`CONEW-N.NSN:95-102`) | BR-007 |
+
+Hold-and-wait is correct, but it has no *retry strategy*: a session that
+meets a held record simply waits in the ADABAS hold queue for as long as
+the holder keeps its transaction open. There is no bounded wait, no defined
+outcome for "could not be serialised", and the only re-drive in the
+repository today is the test that re-invokes the model after the first
+session commits (`tests/test_concurrency.py:88-92`).
+
+This document compares five re-architecture options, recommends a
+target-state approach, and points at the executable models and tests that
+make each option provable in the Python harness. **Nothing here changes the
+shipped Natural source**: `CONEW-N.NSN`, its message codes and
+`tests/harness/natural_model.py:conew_refactored` (the current-state model)
+are unchanged. Every option is implemented as a *separate* model function
+so current-state and target-state behaviour can be compared side by side.
+
+Message-code contract that every option must preserve:
+
+| Code | Meaning | Emitted by | Must stay |
+|------|---------|-----------|-----------|
+| 9800 → 0 | booking successful (CAMSG-N remaps to response 0) | success path | yes |
+| 9902 | cruise no longer available (sold out, empty-file guard) | R1 `ELSE`, guard | yes |
+| 9904 / 9905 | customer / cruise identifier edit failed | `DECIDE` block | yes |
+| 9918 | customer not found (after `BACKOUT`) | customer edit | yes |
+| 9999 | unspecified error (`ON ERROR`) | abend path | yes |
+
+## Vocabulary used below
+
+```
+ ET   END TRANSACTION       commits buffered updates, releases every hold
+ BT   BACKOUT TRANSACTION   discards buffered updates, releases every hold
+ hold queue                 sessions waiting for a held record, in arrival order
+ re-drive                   run the whole read-check-decrement-store again
+ attempt budget             maximum number of re-drives (or of hold-queue parks)
+ guard                      the value a conditional update requires to still hold
+```
+
+The harness is single-threaded and deterministic. "Concurrency" is an
+explicit interleaving: a session either raises `RecordHeldError` (the
+existing behaviour), or — when submitted through `AdabasSim.submit` — is
+*parked* on a `WaitTicket` and re-driven when the holder issues ET/BT.
+Because the simulation never blocks, both a hold-queue timeout and a
+wait-for cycle (deadlock) are surfaced as typed outcomes
+(`HoldTimeoutError`, `DeadlockError`) instead of a hung test.
+
+---
+
+## Option 1 — Bounded blocking wait (current hold-and-wait) + explicit hold-queue timeout
+
+**How it works.** Keep the pessimistic `GET`-in-hold and fake-`UPDATE`
+serialisation exactly as shipped. Add a wait budget: a session that lands
+in the hold queue is granted the record when the holder ends its
+transaction (FIFO), but if it has been re-parked more than *N* times it is
+abandoned with BT and a defined message code.
+
+```
+ Time   Holder (user1)                Waiter (user2)
+ ----   ---------------------------   ----------------------------------
+  t1    GET NCCRUISE  -> held
+  t2                                  GET NCCRUISE  -> PARKED (wait 1 of N)
+  t3    STORE, ET     -> releases
+  t4                                  resumes: GET -> held, status re-read
+  t5                                  0 places -> BT, 9902     (or books)
+```
+
+| Aspect | Mapping |
+|--------|---------|
+| R1 capacity | unchanged: test-and-set on the held record |
+| R2 MAX+1 | unchanged: serialised behind the fake `UPDATE (R2.)` |
+| Pros | smallest delta from production; FIFO fairness comes from the hold queue; no lost updates by construction |
+| Cons | throughput is bounded by the longest-held transaction; both hotspots stay hotspots (every booking on every cruise queues on the single highest `NCCONTRACT` record); a wait budget still needs a message when it is spent |
+| Failure modes | starvation is impossible while FIFO holds; deadlock is possible if two sessions take the two hotspots in opposite order — `CONEW-N` avoids this by always taking `NCCRUISE` before `NCCONTRACT` and by releasing (BT) before it ever waits; a timeout must BT before returning or the cruise hold leaks |
+| Message codes | 9800/9902/9904/9905/9918/9999 unchanged. Timeout returns **9902 by default** (the customer sees "not available"); optionally a new code `9936` "booking busy, try again" *if* the catalogue is extended — see [Message-code impact](#message-code-impact) |
+
+Harness: `AdabasSim(wait_limit=N)`, `AdabasSim.submit`, `WaitTicket`,
+`HoldTimeoutError`, `DeadlockError` (`tests/harness/adabas_sim.py`);
+`booking_outcome` translates a finished ticket into a `BookingResult`
+(`tests/harness/natural_model.py`). Tests: `tests/test_retry.py`
+`HoldQueueWaitTests`.
+
+## Option 2 — Optimistic concurrency with retry loop (compare-and-swap on CRUISE-STATUS)
+
+**How it works.** Read `CRUISE-STATUS` *without* a hold, decide on the
+copy, then write a *conditional* update whose guard is the value that was
+read ("set status to 1 only if it is still 2"). If the guard is stale, or
+the record is momentarily held, re-read and try again up to *N* attempts;
+after the cap return 9902.
+
+```
+ Time   Session A                      Session B
+ ----   ----------------------------   -----------------------------------
+  t1    read status "2" (no hold)
+  t2                                   read status "2" (no hold)
+  t3    swap "2" -> "1"  OK
+  t4    STORE, ET
+  t5                                   swap "2" -> "1"  STALE (now "1")
+  t6                                   re-read "1", swap "1" -> "0"  OK
+  t7                                   STORE, ET
+```
+
+| Aspect | Mapping |
+|--------|---------|
+| R1 capacity | guarded update replaces test-and-set-under-hold; the guard *is* the check, so a lost update cannot happen |
+| R2 MAX+1 | untouched — the fake-`UPDATE` hold is still needed unless combined with Option 4 |
+| Pros | no hold across the decision; readers never block; under low contention one round trip |
+| Cons | Natural has no native compare-and-swap; the guard must be implemented as re-read-in-hold + compare + `UPDATE` (a short hold) or as an ADABAS conditional command; under high contention on one cruise the loop spins and *late arrivals can starve* (no ordering) |
+| Failure modes | livelock on a hot cruise; a guard that compares an `A1` string needs exact normalisation; the retry loop must BT between attempts or the swap's short hold leaks |
+| Message codes | unchanged; exhaustion → 9902 (or 9936 by opt-in) |
+
+Harness: `Session.update_if` (`tests/harness/adabas_sim.py`), model
+`conew_optimistic` (`tests/harness/natural_model.py`). Tests:
+`tests/test_retry.py` `OptimisticRetryTests`.
+
+## Option 3 — Application-level retry loop around the whole transaction (BT + re-drive)
+
+**How it works.** Treat *any* serialisation signal — record held, hold
+timeout, deadlock, stale guard — as "this transaction must be redone".
+`BACKOUT TRANSACTION`, optionally back off with jitter, and re-run the
+*entire* read-check-decrement-store sequence. Stop after *N* attempts with a
+defined outcome. The existing `conew_refactored` is the body of each
+attempt; nothing inside it changes.
+
+```
+        ┌──────────────────────────────────────────────┐
+        │ attempt k (k = 1..N)                          │
+        │  validate → GET cruise (hold) → check/decr    │
+        │  → READ(1) DESC contract (hold) → MAX+1       │
+        │  → customer check → STORE → ET               │
+        └──────────────┬───────────────────────────────┘
+        ok / 9902 / 9918 ───────► return (no retry: business outcome)
+        held / timeout / deadlock ► BT ─► backoff ─► k+1
+        k = N exhausted ──────────► BT ─► 9902 (or 9936), attempts = N
+        abend (ON ERROR) ─────────► BT ─► propagate (never retried)
+```
+
+| Aspect | Mapping |
+|--------|---------|
+| R1 capacity | each attempt still uses the held test-and-set; retry only decides *whether to queue again* |
+| R2 MAX+1 | each attempt recomputes MAX+1 under the fake-`UPDATE` hold, so a re-drive never reuses an id computed in a backed-out attempt |
+| Pros | orthogonal to Options 1/2/4/5 (wraps any body); BT between attempts guarantees no partial state and no leaked hold; naturally hosts an idempotency key |
+| Cons | re-does validation and reads on every attempt; the correct retryable set must be chosen (a 9902/9918 *business* outcome must not be retried); needs an idempotency key or a re-drive after a lost ET acknowledgement can double-book |
+| Failure modes | retrying a business outcome (double 9918 side effects); re-driving after a successful ET (double booking) — mitigated by the request ledger; unbounded jitter hiding a hot spot |
+| Message codes | unchanged; exhaustion → 9902 by default (`exhausted_msg`), 9936 by opt-in; 9999 abends propagate after BT |
+
+Harness: `retry_on_hold`, `RetryBudgetExhausted`, request ledger
+(`Session.record_request` / `Session.completed_request`) in
+`tests/harness/adabas_sim.py`; model `conew_with_retry` in
+`tests/harness/natural_model.py`. Tests: `tests/test_retry.py`
+`BoundedRetryTests`.
+
+## Option 4 — Eliminate the MAX+1 race entirely
+
+**How it works.** Stop deriving `CONTRACT-ID` from the data. The platform
+issues the identifier (a database sequence / identity column, a GUID, or —
+in the HCM target — the object's system-generated key plus an HDL source
+key). The `READ (1) ... DESCENDING` + fake `UPDATE (R2.)` block disappears,
+and with it the single hottest record in the system (every booking on
+*every* cruise queues on the same highest contract row today).
+
+```
+ current:  every booking ──► hold highest NCCONTRACT ──► MAX+1 ──► STORE
+                             (one global serialisation point)
+
+ target:   every booking ──► id := next-value(sequence) ──► STORE
+                             (no shared row, no hold, no retry)
+```
+
+| Aspect | Mapping |
+|--------|---------|
+| R1 capacity | not addressed — combine with Option 1, 3 or 5 |
+| R2 MAX+1 | removed; uniqueness becomes a platform guarantee (REQ-I-002 "the MAX+1 idiom is not carried") |
+| Pros | removes one of the two hotspots and the empty-file guard (BR-013) with it; identifiers stay unique under any interleaving; no message-code change |
+| Cons | ids are no longer dense/monotonic (a gap appears when an attempt backs out after drawing a value) — any downstream that *sorts by* or *reports gaps in* `CONTRACT-ID` must be checked; not expressible in the shipped ADABAS DDM without a platform feature or an id-service |
+| Failure modes | a consumer relying on MAX+1 density; sequence exhaustion (N8) |
+| Message codes | unchanged; 9902 from the empty-file guard becomes unreachable (guard retired) |
+
+Harness: `Session.next_id` / `AdabasFile.next_id` (a monotonic counter that
+is *not* rolled back by BT, like a database sequence). Model:
+`conew_target_state` (`tests/harness/natural_model.py`). Tests:
+`tests/test_retry.py` `TargetStateTests.test_sequence_ids_remove_the_contract_hotspot`.
+
+## Option 5 — Atomic conditional decrement
+
+**How it works.** Replace read → compare → write with a single conditional
+write: "decrement `CRUISE-STATUS` where `CRUISE-STATUS > 0`". The check
+and the set are one operation, so no retry is needed for the capacity
+step; a session that finds the guard false gets 9902 straight away.
+
+```
+ Time   Session A                      Session B
+ ----   ----------------------------   -----------------------------------
+  t1    decr-if-positive  status 1->0  OK (record held until ET)
+  t2                                   decr-if-positive -> record held: waits/retries
+  t3    STORE, ET
+  t4                                   decr-if-positive  status 0 -> guard false -> 9902
+```
+
+| Aspect | Mapping |
+|--------|---------|
+| R1 capacity | the conditional decrement *is* the rule "never below zero" (REQ-I-001); no separate test-and-set |
+| R2 MAX+1 | not addressed — pair with Option 4 |
+| Pros | shortest possible critical section; the invariant lives in the data layer, not in every caller; the model is trivially portable to any SQL/HCM balance API (`UPDATE ... SET n = n-1 WHERE n > 0`) |
+| Cons | still a row-level lock until ET (two sessions on the same last place serialise, one gets 9902); `CRUISE-STATUS` is `A1`, so the target column must be numeric (REQ-D-001 / BR-020) |
+| Failure modes | a contended row still needs a bounded wait or a re-drive (Option 1 or 3) for a *defined* outcome |
+| Message codes | unchanged; guard false → 9902 |
+
+Harness: `Session.decrement_if_positive` (`tests/harness/adabas_sim.py`),
+model `conew_target_state`. Tests: `tests/test_retry.py`
+`TargetStateTests.test_atomic_decrement_never_goes_negative`,
+`test_capacity_contention_resolves_via_lock_wait`.
+
+---
+
+## Decision matrix
+
+| Option | Handles contention | Fairness | Starvation risk | Deadlock risk | Complexity | HCM-target portability |
+|--------|--------------------|----------|-----------------|---------------|------------|------------------------|
+| 1 Bounded wait + timeout | medium (serialises on two hotspots) | FIFO (hold queue) | none while FIFO | low (fixed lock order, BT before wait); timeout bounds it | low | low — ADABAS hold queue has no HCM equivalent; the *timeout → defined outcome* rule ports |
+| 2 Optimistic CAS + retry | low–medium (spins when hot) | none (last writer wins) | **yes** under sustained contention | none (no hold across decision) | medium | medium — CAS/version columns are standard; retry cap ports |
+| 3 BT + re-drive | any (wraps 1/2/4/5) | inherits the body's | bounded by the attempt budget | none added (BT releases before re-drive) | medium | **high** — an application retry with an idempotency key is platform-neutral |
+| 4 Platform-generated id | removes R2 entirely | n/a | none | none | low (target) / n/a (Natural) | **high** — required by REQ-I-002 |
+| 5 Atomic conditional decrement | high (one-op critical section) | row lock order | none | none (single row) | low | **high** — `UPDATE ... WHERE n > 0` / balance API |
+
+## Recommended target-state approach
+
+**Options 4 + 5 as the data-layer primitives, wrapped by Option 3 as the
+control loop.** Option 1's timeout rule ("a wait that is too long ends in a
+defined code, never a hang") is kept as the behaviour the wrapper enforces;
+Option 2 is not recommended as the primary mechanism because it is the only
+option with a real starvation risk and adds nothing once Option 5 exists.
+
+```
+ target-state booking (one attempt)                bounded control loop
+ ┌──────────────────────────────────────────┐      ┌───────────────────────┐
+ │ validate ids (9904/9905)                 │      │ idempotency key seen? │
+ │ decrement-if-positive(cruise)   ── R1    │ ◄──  │  yes → replay result  │
+ │   guard false → 9902                     │      │  no  → attempt 1..N   │
+ │ id := next-value(sequence)      ── R2    │      │ held/timeout/deadlock │
+ │ customer exists? else BT, 9918           │      │   → BT → backoff → k+1│
+ │ STORE contract; write ledger; ET → 9800  │      │ N spent → 9902 (9936) │
+ └──────────────────────────────────────────┘      └───────────────────────┘
+```
+
+Why this combination:
+
+* R1 stops being a race at all (Option 5), so the *only* thing a retry has
+  to handle is a momentarily locked row — a small, bounded set of cases.
+* R2 stops existing (Option 4), removing the global hotspot and BR-013.
+* Option 3 provides the properties none of the primitives give alone:
+  a hard attempt budget, no partial state between attempts (BT), an
+  idempotency key so a lost acknowledgement cannot double-book, and one
+  place to translate exhaustion into a message code.
+* Every message code the UI depends on is preserved; the only *proposed*
+  addition (`9936`) is optional and off by default.
+
+For the **current Natural production code**, no change is recommended as a
+result of this analysis: hold-and-wait remains correct, and the bounded
+wait of Option 1 would need either a nucleus/`TT` parameter change or an
+application-level retry. If a defined "busy" outcome is required *before*
+migration, Option 3 around the existing subprogram is the least invasive
+change and is what `conew_with_retry` models.
+
+## Message-code impact
+
+| Code | Option 1 | Option 2 | Option 3 | Option 4 | Option 5 |
+|------|----------|----------|----------|----------|----------|
+| 9800 → 0 | kept | kept | kept | kept | kept |
+| 9902 | kept; also the default timeout outcome | kept; also the default retry-cap outcome | kept; also the default exhaustion outcome | kept (empty-file guard path becomes unreachable) | kept; guard false |
+| 9904 / 9905 | kept (edits run before any hold) | kept | kept; never retried | kept | kept |
+| 9918 | kept (BT first) | kept | kept; never retried | kept | kept |
+| 9999 | kept (`ON ERROR` → BT) | kept | kept; an abend is backed out and propagated, never re-driven | kept | kept |
+| **9936** (proposed) | "Booking busy — please retry" on timeout | on retry cap | on exhaustion | — | — |
+
+`9936` is a *proposal*, not a change: `CAMSG-N` has no text for it, and
+the models emit it only when a caller passes `exhausted_msg=` /
+`timeout_msg=MSG_BOOKING_BUSY`. The default in every model is 9902, so the
+production message set is preserved unless the catalogue is deliberately
+extended (`tests/test_retry.py:test_exhaustion_can_opt_into_distinct_target_state_code`
+shows the opt-in; `test_customer_not_found_and_sold_out_codes_are_preserved`
+shows the preserved set on the target-state model).
+
+## Mapping to business rules and requirements
+
+| Rule / requirement | Current-state proof | Option 1 | Option 2 | Option 3 | Option 4 | Option 5 | Recommendation |
+|--------------------|---------------------|----------|----------|----------|----------|----------|----------------|
+| BR-006 Test-and-set on held offering record | `tests/test_concurrency.py:68-97` | kept as is | replaced by guarded update | kept inside each attempt | — | replaced by conditional decrement | Option 5 carries the *outcome* (REQ-I-001), not the hold idiom |
+| BR-007 MAX+1 booking identifier under hold | `tests/test_concurrency.py:99-127` | kept | kept | kept inside each attempt; a backed-out attempt never leaks an id | **retired** | — | Option 4: uniqueness carried, mechanism retired (REQ-I-002) |
+| BR-010 Customer must exist; backout otherwise | `tests/test_conew_booking.py:165-175` | BT then 9918 | BT then 9918 | BT then 9918, **not** retried | unchanged | unchanged | unchanged |
+| BR-011 Booking is all-or-nothing | `tests/test_conew_booking.py:200-210` | BT on timeout | BT between attempts | BT between attempts; ledger written in the same ET | unchanged | unchanged | Option 3 makes this hold *across* attempts as well |
+| REQ-I-001 Capacity decremented atomically under contention | `tests/test_concurrency.py:68-97`, `:129-141` | via hold | via guard | via body | — | **native** | Option 5 |
+| REQ-I-002 Identifiers unique under contention | `tests/test_concurrency.py:99-127` | via hold | via hold | via hold per attempt | **native** | — | Option 4 |
+
+Target-state proofs added by this work, per requirement (all in
+`tests/test_retry.py`):
+
+| Requirement | Scenario | Test |
+|-------------|----------|------|
+| REQ-I-001 | last place, loser re-drives → 9902, no overbooking | `test_loser_retries_after_commit_and_gets_9902_for_last_place`, `test_waiter_resumes_at_holders_et_and_gets_9902_for_last_place`, `test_stale_guard_retries_and_gets_9902_for_last_place` |
+| REQ-I-001 | retry succeeds when capacity remains after the competitor's ET | `test_retry_succeeds_when_capacity_remains_after_commit`, `test_waiter_succeeds_when_capacity_remains`, `test_stale_guard_retries_and_succeeds_when_capacity_remains` |
+| REQ-I-001 | budget/wait exhausted → defined code, no partial booking | `test_budget_exhausted_under_sustained_contention_is_defined`, `test_bounded_wait_gives_up_after_repeated_reparking`, `test_retry_cap_under_sustained_contention_returns_9902`, `test_bounded_redrive_of_target_state_is_defined_on_exhaustion` |
+| REQ-I-001 | conditional decrement never goes negative | `test_atomic_decrement_never_goes_negative`, `test_capacity_contention_resolves_via_lock_wait` |
+| REQ-I-002 | no duplicate CONTRACT-ID under hold or retry | `test_maxid_contention_never_duplicates_contract_ids`, `test_interleaved_cruise_and_contract_holds_resolve`, `test_sequence_ids_remove_the_contract_hotspot` |
+| BR-011 / REQ-I-003 | backout leaves no hold, no decrement; abend mid-retry backs out | `test_backout_on_retry_leaves_no_dangling_state`, `test_abend_mid_retry_backs_out_cleanly`, `test_customer_not_found_during_retry_still_backs_out` |
+| BR-011 | idempotent re-drive after a committed ET | `test_completed_attempt_is_never_redriven`, `test_redrive_with_same_request_id_replays_committed_outcome`, `test_failed_request_is_not_recorded_and_can_be_redriven` |
+| REQ-N-002 | no starvation / no deadlock under interleaved holds | `test_fifo_hold_queue_is_fair_and_starvation_free`, `test_wait_for_cycle_is_detected_instead_of_blocking_forever`, `test_model_releases_before_waiting_so_no_cycle_forms` |
+
+## What the harness adds (and what it does not)
+
+`tests/harness/adabas_sim.py`:
+
+* `retry_on_hold(operation, attempts, before_retry)` — bounded re-drive of
+  any callable on `RecordHeldError`; raises `RetryBudgetExhausted`.
+* `AdabasSim(wait_limit=N)` + `submit(session, operation)` — hold-queue
+  mode. A parked `WaitTicket` is re-driven, in FIFO order, when the holder
+  issues ET or BT; a ticket parked more than `wait_limit` times ends with
+  `HoldTimeoutError`; a wait-for cycle ends with `DeadlockError` instead of
+  hanging.
+* `Session.update_if` (guarded update), `Session.decrement_if_positive`
+  (atomic conditional decrement), `Session.next_id` (sequence not rolled
+  back by BT), `record_request` / `completed_request` (idempotency ledger
+  committed with the ET).
+* `RecordHeldError` now carries `key`, `holder` and `requester`; the
+  existing `hold`/`update`/`store`/`et`/`backout` semantics are unchanged
+  and every pre-existing test runs against the same code.
+
+`tests/harness/natural_model.py`: `conew_with_retry` (Option 3),
+`conew_optimistic` (Option 2), `conew_target_state` (Options 4 + 5),
+`booking_outcome` (Option 1 translation), `MSG_BOOKING_BUSY` (proposed
+9936). `conew_original` and `conew_refactored` are untouched.
+
+Not modelled: wall-clock time (backoff is a callback, never a sleep),
+ADABAS response codes and nucleus parameters, and any Natural syntax for a
+conditional update — the models prove the *outcome* each option must
+deliver, which is what the requirements baseline carries into the HCM
+target.

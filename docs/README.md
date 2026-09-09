@@ -12,6 +12,7 @@ application (Natural for AJAX / NJX).
 | [training-guide.md](training-guide.md) | New-developer onboarding: prerequisites, repository layout, conventions, workflow |
 | [testing-and-ci.md](testing-and-ci.md) | The regression test approach, why a driver harness was chosen, and the CI workflow |
 | [concurrency-refactor.md](concurrency-refactor.md) | Why the original `CONEW-N` fails under multi-user load and how the refactor fixes it |
+| [retry-rearchitecture.md](retry-rearchitecture.md) | Five retry/concurrency strategies for `CONEW-N` compared (bounded wait, optimistic guard, BT + re-drive, platform ids, atomic decrement), the recommended target state, and the harness models that prove each |
 
 Regenerate the data dictionary after changing any DDM:
 

@@ -12,16 +12,21 @@ install):
 ```
 tests/
   harness/
-    adabas_sim.py       in-memory model of ADABAS record holds, ET/BT
+    adabas_sim.py       in-memory model of ADABAS record holds, ET/BT,
+                        plus opt-in hold-queue wait/resume, bounded retry,
+                        guarded and conditional updates, sequences
     natural_model.py    faithful Python port of CRLIST-N / CONEW-N /
-                        CAMSG-N / CRGET-N price selection (both the
-                        original and the refactored CONEW-N variants)
+                        CAMSG-N / CRGET-N price selection (the original
+                        and refactored CONEW-N variants, plus the
+                        target-state retry variants)
     fixtures.py         shared cruise/customer/contract fixture data
     source_parser.py    parsers for .NSN sources and .NSD DDMs
   test_conew_booking.py       booking business rules (message codes,
                               availability decrement, price, validation)
   test_crlist_listing.py      listing rules (filters, ordering, formats)
   test_concurrency.py         deterministic two-session interleavings
+  test_retry.py               retry / hold-queue / target-state interleavings
+                              (see retry-rearchitecture.md)
   test_source_conformance.py  asserts the real .NSN/.NSD sources
 tools/
   generate_data_dictionary.py regenerates docs/data-dictionary.md from DDMs
