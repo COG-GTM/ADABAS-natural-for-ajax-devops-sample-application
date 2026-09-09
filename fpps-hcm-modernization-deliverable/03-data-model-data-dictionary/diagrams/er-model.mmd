@@ -1,0 +1,43 @@
+erDiagram
+    NCCUSTOMER ||--o{ NCCONTRACT : "ID-CUSTOMER = PERSON-ID"
+    NCCRUISE   ||--o{ NCCONTRACT : "ID-CRUISE = CRUISE-ID"
+    NCYACHT    ||--o{ NCCRUISE   : "ID-YACHT = YACHT-ID"
+
+    NCCUSTOMER {
+        N8  PERSON-ID PK "descriptor"
+        N8  BIRTH-DATE
+        A1  SEX "descriptor"
+        A20 SURNAME "descriptor"
+        A20 FIRST-NAME-OLD "persisted first name"
+        U40 FIRST-NAME-1 "adapter only"
+        A20 EMAIL "MU, no descriptor"
+        A3  COUNTRY "descriptor"
+        A10 ZIP-CODE "descriptor"
+        A20 CITY "descriptor"
+        PE  PHONE "two occurrences"
+        B8  TIMESTAMP "optimistic lock"
+    }
+    NCCONTRACT {
+        P6  CONTRACT-ID PK "descriptor"
+        P10 PRICE
+        N8  DATE-BOOKING "descriptor"
+        N8  ID-CUSTOMER FK "descriptor"
+        N8  ID-CRUISE FK "descriptor"
+    }
+    NCCRUISE {
+        N8  CRUISE-ID PK "descriptor"
+        A1  CRUISE-STATUS "open places"
+        N8  START-DATE "descriptor"
+        N8  END-DATE "descriptor"
+        A20 START-HARBOR "descriptor"
+        A20 DESTINATION-HARBOR "descriptor"
+        N8  ID-YACHT FK "descriptor"
+        P10 PRICE-1W
+    }
+    NCYACHT {
+        N8  YACHT-ID PK "descriptor"
+        A30 YACHT-NAME "descriptor"
+        A30 YACHT-TYPE "descriptor"
+        P3  BUNKS
+        LOB PICTURE
+    }

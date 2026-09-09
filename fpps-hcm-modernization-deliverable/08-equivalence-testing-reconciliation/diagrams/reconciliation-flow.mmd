@@ -1,0 +1,17 @@
+flowchart LR
+    subgraph legacy["Legacy side (runs here today)"]
+        A["tests/harness/fixtures.py<br/>+ legacy_batch EXTRA masters"] --> B["harness/legacy_batch.py<br/>24 synthetic transactions"]
+        B --> C["tests/harness/natural_model.py<br/>conew_refactored (oracle)<br/>conew_original (cross-check)"]
+        C --> D["sample-output/legacy-expected.json<br/>records + control totals"]
+    end
+    subgraph hcm["HCM side (SI, designed)"]
+        E["Same 24 transactions loaded<br/>HCM Data Loader / test scripts"] --> F["HCM validation + calculation<br/>(Oracle HCM or alternate)"]
+        F --> G["Export: element results /<br/>payroll register analog"]
+        G --> H["Map to HCM output layout<br/>CSV or JSON"]
+    end
+    D --> R
+    H --> R["harness/reconcile.py reconcile<br/>layout validation → control totals →<br/>record level → integrity"]
+    R --> S["summary.json<br/>audit-trail.csv<br/>exceptions.csv<br/>reconciliation-report.md"]
+    S -->|"zero exceptions"| P["Pass: attach to test evidence pack"]
+    S -->|"exceptions"| X["Fix HCM configuration or<br/>adjudicate legacy quirk, re-run"]
+    X -.-> F

@@ -1,0 +1,9 @@
+flowchart LR
+    PV["RDCRUISP page value<br/>PVMYFIRSTNAME"] -->|"RDCRUISP.NSP:619, 663"| PDA["PDA NCCUGE-P<br/>P-CUSTOMER-DATA.FIRST-NAME-1 (U)"]
+    PDA -. "never moved by CUNEW-N / CUMOD-N" .-> DB1["NCCUSTOMER.FIRST-NAME-1 (U40)<br/>commented out in NCDATA-L.NSL:56"]
+    PDAOLD["PDA NCCUGE-P<br/>P-CUSTOMER-DATA.FIRST-NAME-OLD"] -->|"CUNEW-N.NSN:48 / CUMOD-N.NSN:53"| DB2["NCCUSTOMER.FIRST-NAME-OLD (A20)<br/>NCDATA-L.NSL:45"]
+    DB2 -->|"CUGET-N.NSN:96"| OUT["Read path returns FIRST-NAME-OLD only"]
+    DB2 ==>|"primary source"| HCM["PersonName.FirstName (designed)"]
+    DB1 -.->|"fallback only, CR-13"| HCM
+    classDef designed stroke-dasharray: 5 5;
+    class HCM designed;

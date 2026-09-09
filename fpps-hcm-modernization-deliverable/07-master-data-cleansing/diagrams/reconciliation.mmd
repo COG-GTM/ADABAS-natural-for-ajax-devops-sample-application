@@ -1,0 +1,13 @@
+flowchart TB
+    IN["Records in<br/>per file"] --> SPLIT{"worst outcome<br/>per record"}
+    SPLIT -->|pass / correct| LOADED["Loaded<br/>(HDL candidate)"]
+    SPLIT -->|flag| HELD["Held<br/>(steward queue)"]
+    SPLIT -->|reject| REJ["Rejected<br/>(source remediation)"]
+    LOADED & HELD & REJ --> BAL["in = loaded + held + rejected<br/>per file"]
+    LOADED --> HASH["SHA-256 of loadable set<br/>per file"]
+    LOADED & HELD & REJ --> PRICE["NCCONTRACT.PRICE:<br/>in = loaded + held + rejected"]
+    INJ["Injected defects<br/>(build_dirty_db)"] --> CMP["planted vs detected<br/>per rule"]
+    BAL & HASH & PRICE & CMP --> RPT["reconciliation-report.md / .json<br/>exceptions.csv"]
+    RPT --> POST["Post-load: HCM validation and<br/>audit reports (designed)"]
+    classDef designed stroke-dasharray: 5 5;
+    class POST designed;

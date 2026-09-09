@@ -1,0 +1,17 @@
+flowchart LR
+  subgraph ide["NaturalONE workspace (Demonstrated)"]
+    N[".natural<br/>SteplibExtensions = 1;CRUISE16[-1,-1];"]
+  end
+  subgraph ant["Ant deployment (Demonstrated)"]
+    D["natdeploy{Dev,Test,Prod}.xml<br/>project.steplibs = 0; · steplib.nsv = SYSTEM<br/>mapping CRUISE16=CRUISE16;RDCRUISE=RDCRUISE;"]
+    W["wardeploy{Dev,Test,Prod}.xml<br/>STACK=(LOGON RDCRUISE;RDCRUISP)"]
+  end
+  subgraph srv["Natural Development Server 127.0.0.1:2700 (configured, not in repo)"]
+    P["parameter module NDVDEV / NDVTEST / NDVPROD<br/>(runtime STEPLIB chain — Roadmap: obtain from agency)"]
+    R["RDCRUISE"] -->|"CALLNAT unqualified → STEPLIB search"| C["CRUISE16"]
+  end
+  N -.->|"edit / build"| R
+  D -->|"upload + catalog"| R
+  D -->|"upload + catalog"| C
+  W -->|"LOGON RDCRUISE; RDCRUISP"| R
+  P -.->|"defines chain"| R

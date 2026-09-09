@@ -1,0 +1,45 @@
+flowchart LR
+  subgraph B["Browser (rdcruisx.xml)"]
+    B1(["lines.onpvLineClick / onShowdetails1..4 / onHotcruises"])
+    B2[["Cruise detail panel: harbours, dates, yacht, price, image"]]
+    B3(("Alert text in PVMYTOPMAIL"))
+  end
+  subgraph A["NJX adapter (RDCRUISP.NSP)"]
+    A1["COMPRESS selected ID into V-SELCRID<br/>:369 / :410"]
+    A2{"VAL(V-SELCRID) numeric?<br/>:713 (implicit — runtime error otherwise)"}
+    A3["CALLNAT CRGET-N<br/>:716"]
+    A4{"P-RSPCODE = '0'?<br/>:718"}
+    A5{"PICTURELEN = 0?<br/>:730"}
+    A6["Default image noyacht1.jpg<br/>:732"]
+    A7["CALLNAT MAKEURL for picture<br/>:734"]
+    A8["Compose code + text alert<br/>:740"]
+  end
+  subgraph S["Business service (CRGET-N.NSN)"]
+    S1["READ (1) NCCRUISE BY CRUISE-ID = P-SELCRUISEID<br/>:49"]
+    S2{"Record read?<br/>:114-116"}
+    S3["Copy harbours, dates, prices<br/>:55-71"]
+    S4{"Duration 7 / 14 / 21 days?<br/>:73-96"}
+    S5["Price = 1W / 2W / 3W<br/>NONE → 2W"]
+    S6["Resolve yacht name and picture<br/>:100-108"]
+    S7["MSG-NR stays 0 → CAMSG-N → '0'<br/>:121-124"]
+    E1(("9934 'customer changed from another user'<br/>misapplied text for cruise-not-found"))
+  end
+  subgraph D["ADABAS"]
+    D1[("NCCRUISE")]
+    D2[("YACHT-PICTURE / NCYACHT")]
+  end
+  B1 --> A1 --> A2
+  A2 -- yes --> A3 --> S1 --> D1 --> S2
+  S2 -- no --> E1 --> A4
+  S2 -- yes --> S3 --> S4 --> S5 --> S6 --> D2 --> S7 --> A4
+  A4 -- yes --> A5
+  A5 -- yes --> A6 --> B2
+  A5 -- no --> A7 --> B2
+  A4 -- no --> A8 --> B3
+  classDef err fill:#fde2e2,stroke:#b00020,stroke-width:2px
+  classDef comp fill:#fff3cd,stroke:#b8860b,stroke-dasharray:4 2
+  classDef commit fill:#d4edda,stroke:#1e7b34,stroke-width:2px
+  classDef lane fill:#f7f9fc,stroke:#8a94a6
+  classDef tx fill:#fffdf5,stroke:#b8860b,stroke-dasharray:6 3
+  class B3,E1 err
+  class B,A,S,D lane

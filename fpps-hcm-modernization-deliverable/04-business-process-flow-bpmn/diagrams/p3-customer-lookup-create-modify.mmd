@@ -1,0 +1,94 @@
+flowchart LR
+  subgraph B["Browser (rdcruisx.xml)"]
+    B1(["onLoginbutton"])
+    B2(["onMydataSave"])
+    B3[["Logged in: my-data icon, logout icon, GDA filled"]]
+    B4(("Login alert: 9923 / 9924 → 'not found' text; other codes → code + text"))
+    B5[["Customer stored or updated; GDA refreshed"]]
+    B6(("My-data alert: code + text; original values restored on modify"))
+  end
+  subgraph A["NJX adapter (RDCRUISP.NSP)"]
+    A1["CUSTLOGIN: COMPRESS PVLOGINIDENT → P-PERSON-ID<br/>:493-494, CALLNAT CUGET-N :514"]
+    A2{"P-RSPCODE = '0'?<br/>:515"}
+    A3["G-LOGGEDIN := TRUE, copy customer to GDA<br/>:519-535"]
+    A4{"RSPCODE 9924 or 9923?<br/>:556"}
+    A5{"G-LOGGEDIN?<br/>:610"}
+    A6["Map page fields incl. FIRST-NAME-1,<br/>P-TIMESTAMP from GDA :614-623<br/>CALLNAT CUMOD-N :626"]
+    A7["Map page fields incl. FIRST-NAME-1<br/>:663-669, CALLNAT CUNEW-N :672"]
+    A8{"P-RSPCODE = '0'?<br/>:628 / :673"}
+  end
+  subgraph S["Business service (CUGET-N / CUNEW-N / CUMOD-N)"]
+    G0{"#STUDENT?<br/>CUGET-N :50"}
+    G1{"Login ID IS (N8)?<br/>CUGET-N :56"}
+    G2["FIND NCCUSTOMER WITH PERSON-ID<br/>CUGET-N :58"]
+    G3{"Record found?<br/>CUGET-N :60"}
+    G4["READ NCCUSTOMER, compare EMAIL 1<br/>CUGET-N :69-74"]
+    G5{"E-mail matched?<br/>CUGET-N :75"}
+    G6["MOVE-DB-TO-PARA incl. FIRST-NAME-OLD, TIMESTAMP<br/>CUGET-N :88-104"]
+    EG1(("9924 customer id not found"))
+    EG2(("9923 'customer id missing'<br/>misapplied text for e-mail-not-found"))
+    EG9(("9999 function not yet supported"))
+    N0{"#STUDENT?<br/>CUNEW-N :34"}
+    subgraph TN["Transaction scope — CUNEW-N"]
+      N1["READ (1) NCCUSTOMER DESCENDING BY PERSON-ID<br/>UPDATE = fake update, record held :41-42"]
+      N2["PERSON-ID := MAX+1; fill record incl. FIRST-NAME-OLD,<br/>BIRTH-DATE := VAL, TIMESTAMP :43-55"]
+      N3["STORE NCCUSTOMER<br/>:56"]
+      N4[/"END TRANSACTION<br/>:57"/]
+    end
+    N5{"Any record read?<br/>(empty file → loop body skipped)"}
+    NE[\"ON ERROR: log, ESCAPE ROUTINE<br/>no explicit BACKOUT :24-27"\]
+    M0{"#STUDENT?<br/>CUMOD-N :35"}
+    subgraph TM["Transaction scope — CUMOD-N"]
+      M1["FIND (1) NCCUSTOMER WITH PERSON-ID<br/>:44"]
+      M2{"Record found?<br/>:45"}
+      M3{"TIMESTAMP = P-TIMESTAMP?<br/>:50 (optimistic concurrency)"}
+      M4["Write fields incl. FIRST-NAME-OLD,<br/>new *TIMESTMP, UPDATE :53-63"]
+      M5[/"END TRANSACTION<br/>:64"/]
+    end
+    EM1(("9924 customer id not found"))
+    EM2(("9934 customer changed from another user<br/>no update, no explicit backout"))
+    ME[\"ON ERROR: log, ESCAPE ROUTINE<br/>no explicit BACKOUT :25-28"\]
+  end
+  subgraph D["ADABAS"]
+    D1[("NCCUSTOMER")]
+  end
+  B1 --> A1 --> G0
+  G0 -- yes --> EG9 --> A2
+  G0 -- no --> G1
+  G1 -- yes --> G2 --> D1 --> G3
+  G3 -- no --> EG1 --> A2
+  G3 -- yes --> G6
+  G1 -- no --> G4 --> D1 --> G5
+  G5 -- no --> EG2 --> A2
+  G5 -- yes --> G6 --> A2
+  A2 -- yes --> A3 --> B3
+  A2 -- no --> A4
+  A4 -- yes --> B4
+  A4 -- no --> B4
+  B2 --> A5
+  A5 -- no: create --> A7 --> N0
+  N0 -- yes --> EG9
+  N0 -- no --> N1 --> D1 --> N5
+  N5 -- yes --> N2 --> N3 --> D1 --> N4 --> A8
+  N5 -- "no (returns '0' without STORE — candidate)" --> A8
+  N1 -.-> NE -.-> A8
+  A5 -- yes: modify --> A6 --> M0
+  M0 -- yes --> EG9
+  M0 -- no --> M1 --> D1 --> M2
+  M2 -- no --> EM1 --> A8
+  M2 -- yes --> M3
+  M3 -- yes --> M4 --> D1 --> M5 --> A8
+  M3 -- no --> EM2 --> A8
+  M1 -.-> ME -.-> A8
+  A8 -- yes --> B5
+  A8 -- no --> B6
+  classDef err fill:#fde2e2,stroke:#b00020,stroke-width:2px
+  classDef comp fill:#fff3cd,stroke:#b8860b,stroke-dasharray:4 2
+  classDef commit fill:#d4edda,stroke:#1e7b34,stroke-width:2px
+  classDef lane fill:#f7f9fc,stroke:#8a94a6
+  classDef tx fill:#fffdf5,stroke:#b8860b,stroke-dasharray:6 3
+  class B4,B6,EG1,EG2,EG9,EM1,EM2 err
+  class NE,ME comp
+  class N4,M5 commit
+  class B,A,S,D lane
+  class TN,TM tx

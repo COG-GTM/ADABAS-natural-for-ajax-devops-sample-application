@@ -4,6 +4,10 @@ Adabas &amp; Natural for AJAX sample application for testing DevOps approaches
 # Content
 This repository contains the Sunny Island Cruise sample application. It is an Adabas based Natural for AJAX Web-Application that can be imported to a NaturalONE Development Environment.
 
+# Documentation and modernization deliverable
+* [`docs/`](docs/README.md) — system documentation: module inventory, call map, data dictionary, transaction flows, concurrency refactor, testing and CI.
+* [`fpps-hcm-modernization-deliverable/`](fpps-hcm-modernization-deliverable/README.md) — requirements-first extraction package showing how validated business logic is taken from a Natural/ADABAS estate into an HCM implementation, with equivalence and reconciliation harnesses on synthetic data.
+
 # Usage
 The suggested way to use this Application is to create you own fork of this Repository and connect your local NaturalONE development environment and a CI/CD Tool of your choice to implement your Team-Development and DevOps process.
 

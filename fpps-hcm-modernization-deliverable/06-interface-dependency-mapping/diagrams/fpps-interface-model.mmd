@@ -1,0 +1,24 @@
+flowchart TB
+  subgraph sample["Verified in this repository (Demonstrated)"]
+    direction LR
+    P["rdcruisx.xml<br/>27 events"] --> A["RDCRUISP"]
+    A -->|"CALLNAT · USING"| S["CRUISE16 services"]
+    S --> DB[("ADABAS DB 12<br/>FNR 41–44")]
+    W["work file 1<br/>CruiseDescriptions.txt · .jpg"] --> A
+    A -->|"nat: content objects"| B["browser"]
+    E["natdeploy / wardeploy<br/>parm=NDV{DEV,TEST,PROD}"] -.-> A
+  end
+  subgraph fpps["FPPS analogy — requires agency inputs (Roadmap)"]
+    direction LR
+    AG["client agencies<br/>(roster needed)"] -->|"T&A, personnel actions, elections"| IN["inbound feeds<br/>JCL DD / CMWKFnn"]
+    IN --> BJ["Natural batch programs<br/>~7,800 JCL jobs<br/>Control-M schedule"]
+    ON["Web FPPS screens"] --> TX["Natural online transactions"]
+    TX --> M[("personnel-payroll<br/>master files")]
+    BJ --> M
+    M --> OUT["outbound: pay files, LES, W-2,<br/>EHRI, benefit carriers"]
+    M --> DM["Datamart extracts"]
+    OUT --> AG
+    NP["NATPARM · Natural Security<br/>STEPLIB chains"] -.-> TX
+    NP -.-> BJ
+  end
+  sample -. "page ≈ screens · services ≈ transactions · DB 12 ≈ master files · work file ≈ inbound feed · content ≈ outbound · parm ≈ NATPARM" .-> fpps

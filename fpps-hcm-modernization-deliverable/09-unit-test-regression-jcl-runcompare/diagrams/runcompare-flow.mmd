@@ -1,0 +1,15 @@
+flowchart LR
+    subgraph legacy["Legacy pay run (roadmap: needs FPPS environment)"]
+        J1["Scheduler stream<br/>~7,800 jobs"] --> J2["Pay-calculate and<br/>downstream jobs"]
+        J2 --> O1["Batch outputs:<br/>registers, interface files,<br/>datamart extracts"]
+    end
+    subgraph hcm["HCM pay run (designed)"]
+        H1["HCM payroll flow<br/>for the same period"] --> H2["HCM exports:<br/>element results, balances,<br/>costing, interface files"]
+    end
+    O1 --> N["Normalise to comparison layout<br/>(designed; layout per output class)"]
+    H2 --> N
+    N --> RC["Run-compare engine<br/>(designed; extends 08 reconcile.py)<br/>control totals → record level → integrity"]
+    RC --> RP["Run-compare pack:<br/>summary · audit trail · exceptions<br/>(same shape as 08 sample-output)"]
+    RP -->|"zero exceptions"| OK["Sign-off for the period"]
+    RP -->|"exceptions"| AD["Adjudicate: HCM defect,<br/>legacy quirk, or data difference"]
+    INV["Control-M / JCL inventory<br/>(designed ingestion; roadmap data)"] -.->|"which outputs exist,<br/>who produces them"| N
