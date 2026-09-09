@@ -95,10 +95,10 @@ Every emitted code, the services that emit it, and the test modules whose lines 
 <!-- generated:code-test-coverage -->
 | Code | Emitting service(s) | Test modules referencing the code (line hits) | Behavioural model referencing the code |
 |---|---|---|---|
-| 9800 | `CONEW-N` | `tests/test_concurrency.py` (8), `tests/test_conew_booking.py` (3), `tests/test_disposition_analysis.py` (11), `tests/test_retry.py` (17), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (4) |
+| 9800 | `CONEW-N` | `tests/test_concurrency.py` (8), `tests/test_conew_booking.py` (3), `tests/test_disposition_analysis.py` (11), `tests/test_retry.py` (22), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (4) |
 | 9807 | `CRLIST-N` | `tests/test_crlist_listing.py` (2), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (3) |
 | 9857 | `CRLIST-N` | `tests/test_crlist_listing.py` (3), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (2) |
-| 9902 | `CONEW-N` | `tests/test_concurrency.py` (4), `tests/test_conew_booking.py` (11), `tests/test_disposition_analysis.py` (1), `tests/test_retry.py` (22), `tests/test_source_conformance.py` (7) | `tests/harness/natural_model.py` (8) |
+| 9902 | `CONEW-N` | `tests/test_concurrency.py` (4), `tests/test_conew_booking.py` (11), `tests/test_disposition_analysis.py` (1), `tests/test_retry.py` (23), `tests/test_source_conformance.py` (7) | `tests/harness/natural_model.py` (8) |
 | 9904 | `CONEW-N` | `tests/test_conew_booking.py` (6), `tests/test_disposition_analysis.py` (12), `tests/test_retry.py` (1), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (3) |
 | 9905 | `CONEW-N` | `tests/test_conew_booking.py` (5), `tests/test_disposition_analysis.py` (6), `tests/test_retry.py` (1), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (3) |
 | 9918 | `CONEW-N` | `tests/test_conew_booking.py` (5), `tests/test_retry.py` (3), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (3) |

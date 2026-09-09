@@ -168,9 +168,10 @@ RULES = [
      lambda ev: _has(ev, "conew_target_state")),
     ("RETRY-IDEMPOTENT", "integrity",
      "A re-drive after a committed booking replays the outcome: no double "
-     "booking, no double decrement",
+     "booking, no double decrement; the request ledger is unique even under "
+     "concurrent same-id submits",
      RETRY_DOC,
-     lambda ev: _has(ev, "request_id", "never_redriven")),
+     lambda ev: _has(ev, "request_id", "never_redriven", "ledger")),
     # --- derivations -----------------------------------------------------
     ("DER-PRICE-1W", "derivation",
      "Contract PRICE is the one-week price (PRICE-1W)",

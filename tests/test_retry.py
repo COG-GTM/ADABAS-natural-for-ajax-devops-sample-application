@@ -21,7 +21,9 @@ import unittest
 
 from tests.harness import natural_model as nm
 from tests.harness.adabas_sim import (
+    REQUEST_LEDGER,
     DeadlockError,
+    DuplicateRequestError,
     HoldTimeoutError,
     RecordHeldError,
     RetryBudgetExhausted,
@@ -32,6 +34,13 @@ from tests.harness.fixtures import make_db
 
 class AbendError(RuntimeError):
     """Stands in for a Natural runtime error (NATnnnn) raised mid-program."""
+
+
+def abend(text):
+    """Hook callback that abends with ``text`` (fault injection)."""
+    def _raise():
+        raise AbendError(text)
+    return _raise
 
 
 def cruise_isn(db, cruise_id=196):
@@ -272,6 +281,74 @@ class BoundedRetryTests(unittest.TestCase):
         self.assertEqual((second.msg_nr, second.replayed), (9800, False))
         self.assertEqual(cruise_status(db), "0")
 
+    def test_concurrent_same_request_id_books_once_and_replays(self):
+        """Two sessions carry the same request id at the same time (a
+        client double-submit). user2 arrives while user1 is mid-transaction:
+        the ledger claim is held, so user2 conflicts, waits for user1's ET
+        and then finds the committed outcome to replay. One decrement, one
+        contract, both callers see the same contract id."""
+        db = make_db(cruise_status="5")
+        user1, user2 = db.session("user1"), db.session("user2")
+        second = {}
+
+        def user2_double_submits():
+            second["result"] = nm.conew_with_retry(
+                user2, "10000001", "196", attempts=1, request_id="req-9")
+
+        hooks = nm.Hooks(after_maxid_read=user2_double_submits)
+        first = nm.conew_with_retry(user1, "10000001", "196", hooks=hooks,
+                                    request_id="req-9")
+        self.assertEqual((first.msg_nr, first.replayed), (9800, False))
+        # user2's only attempt met the ledger claim: busy, nothing booked
+        self.assertEqual((second["result"].msg_nr, second["result"].attempts),
+                         (9902, 1))
+
+        redrive = nm.conew_with_retry(user2, "10000001", "196", attempts=1,
+                                      request_id="req-9")
+        self.assertEqual((redrive.msg_nr, redrive.replayed), (9800, True))
+        self.assertEqual(redrive.new_contract_id, first.new_contract_id)
+        self.assertEqual(cruise_status(db), "4")
+        self.assertEqual(len(contracts_for(db, 196)), 1)
+        self.assertEqual((db.et_count, db.hold_table), (1, {}))
+
+    def test_same_request_id_retry_finds_the_replay(self):
+        """The retrying twin: user2 conflicts on the ledger claim, user1
+        commits in user2's before_retry, and user2's second attempt replays
+        instead of booking again."""
+        db = make_db(cruise_status="5")
+        user1, user2 = db.session("user1"), db.session("user2")
+        user1.record_request("req-11", {})  # user1 has claimed the request
+
+        def user1_commits(attempt, err):
+            self.assertEqual(err.key, (REQUEST_LEDGER, "req-11"))
+            user1.backout()  # drop the bare claim, then book for real
+            nm.conew_with_retry(user1, "10000001", "196", request_id="req-11")
+
+        second = nm.conew_with_retry(user2, "10000001", "196", attempts=2,
+                                     before_retry=user1_commits,
+                                     request_id="req-11")
+        self.assertEqual((second.msg_nr, second.replayed, second.attempts),
+                         (9800, True, 2))
+        self.assertEqual(cruise_status(db), "4")
+        self.assertEqual(len(contracts_for(db, 196)), 1)
+
+    def test_ledger_uniqueness_is_enforced_at_et(self):
+        """Belt and braces: if a caller bypasses the claim and two
+        transactions both buffer the same request id, the second ET is
+        refused and backed out, exactly like a unique-constraint violation."""
+        db = make_db(cruise_status="5")
+        user1, user2 = db.session("user1"), db.session("user2")
+        user1.record_request("req-13", {"msg_nr": 9800})
+        user1.et()
+        user2._pending_requests.append(("req-13", {"msg_nr": 9800}))
+        isn = begin_booking(user2)
+
+        with self.assertRaises(DuplicateRequestError):
+            user2.et()
+        self.assertEqual(cruise_status(db), "5")
+        self.assertEqual(db.hold_table, {})
+        self.assertNotIn(("NCCRUISE", isn), user2.holds)
+
     def test_customer_not_found_during_retry_still_backs_out(self):
         """BR-010 is unchanged by the retry wrapper: 9918 after a retry
         still discards the buffered decrement."""
@@ -486,6 +563,32 @@ class HoldQueueWaitTests(unittest.TestCase):
         self.assertIsNone(tickets[0].error)
         self.assertEqual(tickets[0].result.msg_nr, 9800)
 
+    def test_resumed_waiter_abend_stays_with_the_waiter(self):
+        """user2 is parked on the cruise; when user1's ET resumes it, user2
+        re-acquires the hold and then abends. The abend must not surface
+        through user1's ET (user1 is already committed), and user2's
+        transaction is backed out: no hold, no decrement, no contract."""
+        db = make_db(cruise_status="3")
+        user1, user2 = db.session("user1"), db.session("user2")
+        begin_booking(user1)
+        hooks = nm.Hooks(after_maxid_read=abend("NAT0954 abnormal termination"))
+
+        ticket = db.submit(user2, lambda: nm.conew_refactored(
+            user2, "10000002", "196", hooks=hooks))
+        self.assertFalse(ticket.done)
+
+        commit_booking(user1)  # returns normally
+
+        self.assertTrue(ticket.done)
+        self.assertIsInstance(ticket.error, AbendError)
+        self.assertEqual(user2.holds, set())
+        self.assertEqual(user2._pending_updates, {})
+        self.assertEqual(db.hold_table, {})
+        self.assertEqual(cruise_status(db), "2")  # only user1's decrement
+        self.assertEqual(len(contracts_for(db, 196)), 1)
+        with self.assertRaises(AbendError):
+            nm.booking_outcome(ticket)
+
 
 class OptimisticRetryTests(unittest.TestCase):
     """Option 2: compare-and-swap on CRUISE-STATUS with a retry cap."""
@@ -575,6 +678,22 @@ class OptimisticRetryTests(unittest.TestCase):
         self.assertEqual(sorted(contract_ids(db)), [500100, 500101, 500102])
         self.assertEqual(db.hold_table, {})
 
+    def test_abend_after_swap_backs_out(self):
+        """ON ERROR after the swap took the row and the MAX+1 hold: both
+        holds and the buffered decrement are discarded."""
+        db = make_db(cruise_status="3")
+        user2 = db.session("user2")
+        hooks = nm.Hooks(after_maxid_read=abend("NAT3009 transaction lost"))
+
+        with self.assertRaises(AbendError):
+            nm.conew_optimistic(user2, "10000002", "196", hooks=hooks)
+
+        self.assertEqual(db.hold_table, {})
+        self.assertEqual(user2._pending_updates, {})
+        self.assertEqual(cruise_status(db), "3")
+        self.assertEqual(contract_ids(db), [500100])
+        self.assertEqual(db.bt_count, 1)
+
 
 class TargetStateTests(unittest.TestCase):
     """Options 4 + 5: atomic conditional decrement + platform identifier."""
@@ -636,6 +755,23 @@ class TargetStateTests(unittest.TestCase):
         self.assertEqual(ctx.exception.attempts, 2)
         self.assertEqual(user2.holds, set())
         self.assertEqual(cruise_status(db), "1")
+
+    def test_abend_after_decrement_backs_out(self):
+        """ON ERROR between the conditional decrement and the STORE: the
+        decrement is discarded, the row is released; the consumed sequence
+        value is the only trace (a gap, as with any database sequence)."""
+        db = make_db(cruise_status="3")
+        user2 = db.session("user2")
+        for hook_name in ("after_status_read", "after_maxid_read"):
+            hooks = nm.Hooks(**{hook_name: abend("NAT0954 abnormal termination")})
+            with self.assertRaises(AbendError):
+                nm.conew_target_state(user2, "10000002", "196", hooks=hooks)
+            self.assertEqual(db.hold_table, {})
+            self.assertEqual(user2._pending_updates, {})
+            self.assertEqual(user2._pending_stores, [])
+            self.assertEqual(cruise_status(db), "3")
+            self.assertEqual(contract_ids(db), [500100])
+        self.assertEqual(db.bt_count, 2)
 
     def test_customer_not_found_and_sold_out_codes_are_preserved(self):
         db = make_db(cruise_status="1")

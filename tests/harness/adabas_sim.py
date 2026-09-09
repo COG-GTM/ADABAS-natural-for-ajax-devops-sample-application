@@ -55,6 +55,15 @@ class DeadlockError(RecordHeldError):
     """Two parked sessions each wait for a record the other holds."""
 
 
+class DuplicateRequestError(Exception):
+    """ET would commit a request id that is already in the ledger (the
+    unique-constraint violation of an idempotency table)."""
+
+    def __init__(self, request_id):
+        super().__init__(f"request {request_id!r} already committed")
+        self.request_id = request_id
+
+
 class RetryBudgetExhausted(Exception):
     """Every attempt of ``retry_on_hold`` ended in ``RecordHeldError``."""
 
@@ -91,7 +100,8 @@ class WaitTicket:
     """An operation parked in the hold queue (``AdabasSim.submit``).
 
     ``done`` becomes true when the operation returned (``result``) or was
-    abandoned (``error``: ``HoldTimeoutError`` or ``DeadlockError``);
+    abandoned (``error``: ``HoldTimeoutError``, ``DeadlockError`` or the
+    operation's own exception, after its transaction was backed out);
     ``waits`` counts how often it was parked; ``attempts`` how often it ran.
     """
 
@@ -104,6 +114,10 @@ class WaitTicket:
         self.done = False
         self.waits = 0
         self.attempts = 0
+
+
+#: pseudo-file whose "ISNs" are request ids; only ever used as hold keys.
+REQUEST_LEDGER = "__REQUEST_LEDGER__"
 
 
 class AdabasFile:
@@ -246,7 +260,13 @@ class Session:
         return self.db.files[file_name].next_id(field)
 
     def record_request(self, request_id, payload):
-        """Buffer an idempotency-ledger entry that commits with the ET."""
+        """Claim ``request_id`` and buffer its ledger entry until ET.
+
+        The claim is a hold on the ledger row, so a concurrent transaction
+        for the same request meets ``RecordHeldError`` (and re-checks the
+        ledger on its next attempt) instead of booking a second time.
+        """
+        self.hold(REQUEST_LEDGER, request_id)
         self._pending_requests.append((request_id, payload))
 
     def completed_request(self, request_id):
@@ -256,7 +276,16 @@ class Session:
     # -- transaction end -----------------------------------------------
 
     def et(self):
-        """END TRANSACTION: apply buffered changes, release holds."""
+        """END TRANSACTION: apply buffered changes, release holds.
+
+        A pending ledger entry whose id is already committed violates the
+        ledger's uniqueness: the whole transaction is backed out and
+        ``DuplicateRequestError`` is raised, nothing is applied.
+        """
+        for request_id, _ in self._pending_requests:
+            if request_id in self.db.request_ledger:
+                self.backout()
+                raise DuplicateRequestError(request_id)
         for (file_name, isn), values in self._pending_updates.items():
             self.db.files[file_name].records[isn].update(values)
         for file_name, row in self._pending_stores:
@@ -333,11 +362,18 @@ class AdabasSim:
         return [t for waiters in self.hold_queue.values() for t in waiters]
 
     def _drive(self, ticket):
+        """Run the ticket once. A hold conflict parks it; any other exception
+        is the waiter's own abend: it is recorded on the ticket and the
+        waiter's transaction is backed out, so a failure in a resumed waiter
+        never surfaces through the holder's ET/BT that resumed it."""
         ticket.attempts += 1
         try:
             ticket.result = ticket.operation()
         except RecordHeldError as exc:
             self._park(ticket, exc)
+            return
+        except Exception as exc:
+            self._abandon(ticket, exc)
             return
         ticket.done = True
 

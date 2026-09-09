@@ -33,6 +33,7 @@ Message codes mirror CAMSG-N: 9800 booking OK (mapped to response code 0),
 missing, 9918 customer number not found.
 """
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 from .adabas_sim import RecordHeldError, RetryBudgetExhausted, retry_on_hold
@@ -264,6 +265,19 @@ def conew_refactored(session, customer_in, cruise_in, booking_date=20260820,
 # ---------------------------------------------------------------------------
 
 
+@contextmanager
+def _on_error(session):
+    """CONEW-N's ON ERROR block (lines 36-40): whatever escapes the
+    transaction body — a hold conflict or an abend — BACKOUT TRANSACTION
+    runs before the condition propagates, so no hold, buffered update or
+    store outlives the failure."""
+    try:
+        yield
+    except Exception:
+        session.backout()
+        raise
+
+
 def _store_and_commit(session, result, cruise, cruise_id, customer_id,
                       booking_date, new_id):
     """HANDLE-INPUT-DATA + STORE + ET tail shared by the target-state
@@ -309,30 +323,33 @@ def conew_with_retry(session, customer_in, cruise_in, booking_date=20260820,
     Any other exception is the ON ERROR path: BACKOUT TRANSACTION, then the
     abend propagates (no retry of an abend).
 
-    ``request_id`` is an idempotency key: the committed outcome is written
-    to the request ledger inside the same transaction as the booking, and a
-    later invocation with the same key replays it without touching
-    NCCRUISE/NCCONTRACT again.
+    ``request_id`` is an idempotency key. Every attempt first looks the id
+    up in the committed ledger (replaying the stored outcome if present),
+    then claims it under a hold so a concurrent transaction for the same id
+    is a hold conflict that retries — and finds the replay — rather than a
+    second booking. The ledger entry commits with the booking's own ET.
     """
-    if request_id is not None:
-        done = session.completed_request(request_id)
-        if done is not None:
-            result = _finish(BookingResult(), done["msg_nr"],
-                             new_contract_id=done["new_contract_id"])
-            result.replayed = True
-            return result
+    def replay(done, attempt):
+        result = _finish(BookingResult(), done["msg_nr"],
+                         new_contract_id=done["new_contract_id"])
+        result.replayed = True
+        result.attempts = attempt
+        return result
 
     def attempt_once(attempt):
         ledger = {}  # committed by the ET inside conew_refactored, filled below
         if request_id is not None:
-            session.record_request(request_id, ledger)
+            done = session.completed_request(request_id)
+            if done is not None:
+                return replay(done, attempt)
+            session.record_request(request_id, ledger)  # may raise RecordHeldError
         try:
             res = conew_refactored(session, customer_in, cruise_in,
                                    booking_date, hooks)
         except RecordHeldError:
-            raise
+            raise  # conew_refactored has already backed out
         except Exception:
-            session.backout()
+            session.backout()  # ON ERROR: the abend is not retried
             raise
         res.attempts = attempt
         if res.msg_nr == MSG_OK:
@@ -355,12 +372,16 @@ def booking_outcome(ticket, timeout_msg=MSG_NOT_AVAILABLE):
 
     A completed ticket yields the booking's own result; a ticket abandoned
     by the nucleus (``HoldTimeoutError``/``DeadlockError``) becomes the
-    defined ``timeout_msg`` (9902 by default, or ``MSG_BOOKING_BUSY``).
+    defined ``timeout_msg`` (9902 by default, or ``MSG_BOOKING_BUSY``). A
+    ticket abandoned by its own abend re-raises it: that is the waiter's ON
+    ERROR outcome (already backed out), not a booking message.
     """
     if ticket.error is None:
         result = ticket.result
-    else:
+    elif isinstance(ticket.error, RecordHeldError):
         result = _finish(BookingResult(), timeout_msg)
+    else:
+        raise ticket.error
     result.attempts = ticket.attempts
     return result
 
@@ -373,7 +394,8 @@ def conew_optimistic(session, customer_in, cruise_in, booking_date=20260820,
     code did) but the decrement is applied with ``update_if`` guarded by
     that value, so a lost update is impossible: a stale guard — or a hold
     conflict while acquiring the row — backs out, re-reads and retries.
-    After ``attempts`` failed swaps the caller gets 9902.
+    After ``attempts`` failed swaps the caller gets 9902. An abend anywhere
+    in the loop takes the ON ERROR path (``_on_error``).
     """
     hooks = hooks or Hooks()
     result = BookingResult()
@@ -389,29 +411,31 @@ def conew_optimistic(session, customer_in, cruise_in, booking_date=20260820,
         return _finish(result, msg_nr)
     isn, cruise = found[0]
 
-    for attempt in range(1, attempts + 1):
-        result.attempts = attempt
-        guard = cruise["CRUISE-STATUS"]
-        hooks.after_status_read()
-        if int(guard) <= 0:
-            return _finish(result, MSG_NOT_AVAILABLE)
-        try:
-            swapped = session.update_if(
-                "NCCRUISE", isn, "CRUISE-STATUS", guard,
-                {"CRUISE-STATUS": str(int(guard) - 1)})
-            if swapped:
-                new_id = _max_plus_one_held(session)
-                if new_id is None:
-                    session.backout()
-                    return _finish(result, MSG_NOT_AVAILABLE)
-                hooks.after_maxid_read()
-                return _store_and_commit(session, result, cruise, cruise_id,
-                                         customer_id, booking_date, new_id)
-        except RecordHeldError:
-            pass
-        session.backout()
-        cruise = session.find("NCCRUISE", "CRUISE-ID", cruise_id)[0][1]
-    return _finish(result, MSG_NOT_AVAILABLE)
+    with _on_error(session):
+        for attempt in range(1, attempts + 1):
+            result.attempts = attempt
+            guard = cruise["CRUISE-STATUS"]
+            hooks.after_status_read()
+            if int(guard) <= 0:
+                return _finish(result, MSG_NOT_AVAILABLE)
+            try:
+                swapped = session.update_if(
+                    "NCCRUISE", isn, "CRUISE-STATUS", guard,
+                    {"CRUISE-STATUS": str(int(guard) - 1)})
+                if swapped:
+                    new_id = _max_plus_one_held(session)
+                    if new_id is None:
+                        session.backout()
+                        return _finish(result, MSG_NOT_AVAILABLE)
+                    hooks.after_maxid_read()
+                    return _store_and_commit(session, result, cruise,
+                                             cruise_id, customer_id,
+                                             booking_date, new_id)
+            except RecordHeldError:
+                pass
+            session.backout()
+            cruise = session.find("NCCRUISE", "CRUISE-ID", cruise_id)[0][1]
+        return _finish(result, MSG_NOT_AVAILABLE)
 
 
 def conew_target_state(session, customer_in, cruise_in,
@@ -423,7 +447,8 @@ def conew_target_state(session, customer_in, cruise_in,
     the MAX+1 hold on NCCONTRACT disappears. Customer validation runs
     before any write. Row contention still surfaces as ``RecordHeldError``
     and is resolved by the platform's lock wait (``AdabasSim.submit``) or a
-    bounded re-drive (``retry_on_hold``).
+    bounded re-drive (``retry_on_hold``); it and any abend leave through
+    ``_on_error`` (BACKOUT TRANSACTION first).
     """
     hooks = hooks or Hooks()
     result = BookingResult(attempts=1)
@@ -442,7 +467,7 @@ def conew_target_state(session, customer_in, cruise_in,
     if not _customer_exists(session, customer_id):
         return _finish(result, MSG_CUSTOMER_NOT_FOUND)
 
-    try:
+    with _on_error(session):
         remaining = session.decrement_if_positive(
             "NCCRUISE", isn, "CRUISE-STATUS")
         hooks.after_status_read()
@@ -460,9 +485,6 @@ def conew_target_state(session, customer_in, cruise_in,
         })
         session.et()
         return _finish(result, MSG_OK, new_contract_id=new_id)
-    except RecordHeldError:
-        session.backout()
-        raise
 
 
 @dataclass
