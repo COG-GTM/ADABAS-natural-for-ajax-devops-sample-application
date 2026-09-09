@@ -128,7 +128,7 @@ after the cap return 9902.
 | R2 MAX+1 | untouched — the fake-`UPDATE` hold is still needed unless combined with Option 4 |
 | Pros | no hold across the decision; readers never block; under low contention one round trip |
 | Cons | Natural has no native compare-and-swap; the guard must be implemented as re-read-in-hold + compare + `UPDATE` (a short hold) or as an ADABAS conditional command; under high contention on one cruise the loop spins and *late arrivals can starve* (no ordering) |
-| Failure modes | livelock on a hot cruise; a guard that compares an `A1` string needs exact normalisation; the retry loop must BT between attempts or the swap's short hold leaks; the guard protects *only* the guarded field — every other value the contract copies from the cruise (`PRICE-1W`) must be re-read under the swap's hold, not taken from the unheld snapshot, or a concurrent re-pricing is booked at the old price |
+| Failure modes | livelock on a hot cruise; a guard that compares an `A1` string needs exact normalisation; the retry loop must BT between attempts or the swap's short hold leaks, and the sold-out exit is a BT too (CONEW-N lines 133-138) or whatever the session had open when it read 0 rides on a later ET; the guard protects *only* the guarded field — every other value the contract copies from the cruise (`PRICE-1W`) must be re-read under the swap's hold, not taken from the unheld snapshot, or a concurrent re-pricing is booked at the old price |
 | Message codes | unchanged; exhaustion → 9902 (or 9936 by opt-in) |
 
 Harness: `Session.update_if` (`tests/harness/adabas_sim.py`), model
@@ -413,9 +413,11 @@ Target-state proofs added by this work, per requirement (all in
   claim is returned to the claimant instead of being booked twice; the
   entry — a dict or a callable evaluated at ET, so it can describe the
   contract the same ET stores — is copied into the ledger by that ET; a
-  duplicate at ET is refused with `DuplicateRequestError` after a BT, and
-  a payload that fails to evaluate is backed out the same way before the
-  error propagates — ET never leaves a half-open transaction).
+  duplicate at ET is refused with `DuplicateRequestError` after a BT, a
+  second claim of the same id inside one transaction is refused at the
+  claim with the same error and the first claim stands, and a payload
+  that fails to evaluate is backed out the same way before the error
+  propagates — ET never leaves a half-open transaction).
   `conew_with_retry` binds the entry to a fingerprint of the request's
   inputs and raises `RequestMismatchError` when a re-used id presents
   different inputs; a `DuplicateRequestError` at ET (a claim path that

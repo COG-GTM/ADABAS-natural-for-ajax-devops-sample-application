@@ -494,8 +494,10 @@ def conew_optimistic(session, customer_in, cruise_in, booking_date=20260820,
     The guard covers CRUISE-STATUS only, so once the swap holds the row the
     record is re-read under that hold and the contract is priced from the
     held copy, never from the unheld snapshot. After ``attempts`` failed
-    swaps the caller gets 9902. An abend anywhere in the loop takes the ON
-    ERROR path (``_on_error``).
+    swaps the caller gets 9902. Every 9902 is preceded by BACKOUT
+    TRANSACTION, as in CONEW-N (lines 133-138): whatever the session had
+    open when the sold-out read was taken ends with it. An abend anywhere
+    in the loop takes the ON ERROR path (``_on_error``).
     """
     hooks = hooks or Hooks()
     result = BookingResult()
@@ -518,6 +520,7 @@ def conew_optimistic(session, customer_in, cruise_in, booking_date=20260820,
             guard = cruise["CRUISE-STATUS"]
             hooks.after_status_read()
             if int(guard) <= 0:
+                session.backout()
                 return _finish(result, MSG_NOT_AVAILABLE)
             try:
                 swapped = session.update_if(

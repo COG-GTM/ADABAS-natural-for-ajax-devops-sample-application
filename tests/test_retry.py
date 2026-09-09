@@ -572,6 +572,24 @@ class BoundedRetryTests(unittest.TestCase):
         self.assertEqual(db.hold_table, {})
         self.assertNotIn(("NCCRUISE", isn), user2.holds)
 
+    def test_second_claim_of_the_same_request_id_in_one_transaction_is_refused(self):
+        """One claim per request id per transaction: the second
+        ``record_request`` for an id this transaction already claimed is
+        refused at the claim (unique index), the first claim stays as it
+        was, and ET writes exactly that one entry."""
+        db = make_db(cruise_status="5")
+        user1 = db.session("user1")
+        self.assertIsNone(user1.record_request("req-14", {"msg_nr": 9800}))
+
+        with self.assertRaises(DuplicateRequestError):
+            user1.record_request("req-14", {"msg_nr": 9902})
+        self.assertIn((REQUEST_LEDGER, "req-14"), user1.holds)  # claim kept
+        self.assertTrue(user1.in_transaction())
+
+        user1.et()
+        self.assertEqual(db.request_ledger, {"req-14": {"msg_nr": 9800}})
+        self.assertEqual(db.hold_table, {})
+
     def test_customer_not_found_during_retry_still_backs_out(self):
         """BR-010 is unchanged by the retry wrapper: 9918 after a retry
         still discards the buffered decrement."""
@@ -1039,6 +1057,27 @@ class OptimisticRetryTests(unittest.TestCase):
         self.assertEqual(len(contracts_for(db, 196)), 1)
         self.assertEqual(cruise_status(db), "0")
         self.assertEqual(db.hold_table, {})
+
+    def test_sold_out_answer_backs_out_whatever_the_session_had_open(self):
+        """9902 is a BACKOUT TRANSACTION path in CONEW-N (lines 133-138).
+        A session that enters the CAS loop with a transaction already open
+        (a hold and a buffered update on another cruise) and reads a
+        sold-out status leaves with nothing held or buffered, so that work
+        cannot ride on a later ET."""
+        db = make_db(cruise_status="0")
+        user1 = db.session("user1")
+        other_isn = begin_booking(user1, cruise_id=1484)
+        self.assertTrue(user1.in_transaction())
+
+        first = nm.conew_optimistic(user1, "10000001", "196")
+
+        self.assertEqual((first.msg_nr, first.attempts), (9902, 1))
+        self.assertFalse(user1.in_transaction())
+        self.assertEqual(db.hold_table, {})
+        self.assertNotIn(("NCCRUISE", other_isn), user1.holds)
+        user1.et()  # nothing left to commit
+        self.assertEqual(cruise_status(db, 1484), "3")
+        self.assertEqual(cruise_status(db), "0")
 
     def test_price_change_between_read_and_swap_is_not_booked_stale(self):
         """The guard covers CRUISE-STATUS only. A competitor re-prices the

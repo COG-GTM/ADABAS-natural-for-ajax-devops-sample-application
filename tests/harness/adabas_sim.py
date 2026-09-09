@@ -57,11 +57,12 @@ class DeadlockError(RecordHeldError):
 
 
 class DuplicateRequestError(Exception):
-    """ET would commit a request id that is already in the ledger (the
-    unique-constraint violation of an idempotency table)."""
+    """A request id would be recorded twice: ET would commit an id that is
+    already in the ledger, or a transaction claims an id it has already
+    claimed (the unique-constraint violation of an idempotency table)."""
 
     def __init__(self, request_id):
-        super().__init__(f"request {request_id!r} already committed")
+        super().__init__(f"request {request_id!r} already recorded")
         self.request_id = request_id
 
 
@@ -338,7 +339,10 @@ class Session:
         ledger is read *under* the hold: if the id was committed in the
         meantime the committed entry (a copy) is returned and nothing is
         buffered, so lookup and claim are one atomic step; otherwise the
-        claim is buffered and None is returned.
+        claim is buffered and None is returned. One claim per id per
+        transaction: claiming an id this transaction has already claimed
+        raises ``DuplicateRequestError`` (a second INSERT of the same key
+        fails on the unique index) and leaves the first claim as it was.
         ``payload`` is a dict, or a zero-argument callable evaluated at ET
         time (so the entry can describe the outcome the same ET commits).
         Either way the ledger stores its own copy.
@@ -347,6 +351,8 @@ class Session:
         done = self.completed_request(request_id)
         if done is not None:
             return done
+        if any(claimed == request_id for claimed, _ in self._pending_requests):
+            raise DuplicateRequestError(request_id)
         self._pending_requests.append((request_id, payload))
         return None
 
