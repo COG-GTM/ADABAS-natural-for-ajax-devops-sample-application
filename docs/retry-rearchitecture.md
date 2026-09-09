@@ -325,6 +325,18 @@ reasonable target-state simplification (no write for an invalid request),
 but it changes the answer for that one input class and is therefore *not*
 proposed here — it would need its own equivalence-test waiver.
 
+The same applies to the one legacy answer that is wrong by policy: a
+cruise identifier that matches no record returns response code 0 with
+booking identifier 0 (BR-M005, CONEW-N lines 79-80 and 139-146). Every
+model here reproduces it, on purpose — this document re-architects the two
+*race points*, and its models must run-compare against the current state
+for every input class the concurrency change does not touch. REQ-I-006
+("no silent success") already adjudicates that answer as *redesign* in
+`../fpps-hcm-modernization-deliverable/05-requirements-baseline/what-we-will-not-build.md`;
+the target-side proof (AC-REQ-I-006-1) is a separate change to the
+target-state models' not-found path, not a concurrency concern, and is
+left to that work item.
+
 ## Mapping to business rules and requirements
 
 | Rule / requirement | Current-state proof | Option 1 | Option 2 | Option 3 | Option 4 | Option 5 | Recommendation |

@@ -1124,6 +1124,22 @@ class OptimisticRetryTests(unittest.TestCase):
         self.assertEqual(cruise_status(db, 1484), "3")
         self.assertEqual(cruise_status(db), "0")
 
+    def test_zero_retry_cap_is_refused_not_answered_as_sold_out(self):
+        """attempts=0 would skip the loop and fall through to 9902 with
+        whatever the session had open still open. As with retry_on_hold it
+        is a caller error: ValueError before anything is read, written or
+        held, and the cruise is untouched."""
+        db = make_db(cruise_status="1")
+        user1 = db.session("user1")
+
+        with self.assertRaises(ValueError):
+            nm.conew_optimistic(user1, "10000001", "196", attempts=0)
+
+        self.assertFalse(user1.in_transaction())
+        self.assertEqual(db.hold_table, {})
+        self.assertEqual(cruise_status(db), "1")
+        self.assertEqual(contracts_for(db, 196), [])
+
     def test_price_change_between_read_and_swap_is_not_booked_stale(self):
         """The guard covers CRUISE-STATUS only. A competitor re-prices the
         cruise between the unheld read and the swap; the swap still succeeds

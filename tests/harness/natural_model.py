@@ -497,8 +497,12 @@ def conew_optimistic(session, customer_in, cruise_in, booking_date=20260820,
     swaps the caller gets 9902. Every 9902 is preceded by BACKOUT
     TRANSACTION, as in CONEW-N (lines 133-138): whatever the session had
     open when the sold-out read was taken ends with it. An abend anywhere
-    in the loop takes the ON ERROR path (``_on_error``).
+    in the loop takes the ON ERROR path (``_on_error``). ``attempts`` must
+    be at least 1 (as for ``retry_on_hold``): a cap of 0 is a caller error,
+    not a sold-out answer.
     """
+    if attempts < 1:
+        raise ValueError("attempts must be at least 1")
     hooks = hooks or Hooks()
     result = BookingResult()
 
