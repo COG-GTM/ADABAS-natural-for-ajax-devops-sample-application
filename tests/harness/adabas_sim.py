@@ -350,14 +350,22 @@ class Session:
 
         A pending ledger entry whose id is already committed violates the
         ledger's uniqueness: the whole transaction is backed out and
-        ``DuplicateRequestError`` is raised, nothing is applied.
+        ``DuplicateRequestError`` is raised, nothing is applied. Likewise a
+        ledger payload that fails to evaluate abends the ET: the transaction
+        is backed out (holds released, nothing applied) before the error
+        propagates.
         """
         for request_id, _ in self._pending_requests:
             if request_id in self.db.request_ledger:
                 self.backout()
                 raise DuplicateRequestError(request_id)
-        entries = [(request_id, dict(payload() if callable(payload) else payload))
-                   for request_id, payload in self._pending_requests]
+        try:
+            entries = [(request_id,
+                        dict(payload() if callable(payload) else payload))
+                       for request_id, payload in self._pending_requests]
+        except Exception:
+            self.backout()
+            raise
         for (file_name, isn), values in self._pending_updates.items():
             self.db.files[file_name].records[isn].update(values)
         for file_name, row in self._pending_stores:

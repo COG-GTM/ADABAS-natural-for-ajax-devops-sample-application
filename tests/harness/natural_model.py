@@ -491,8 +491,11 @@ def conew_target_state(session, customer_in, cruise_in,
 
     Capacity is taken with one atomic conditional decrement (REQ-I-001) and
     the contract identifier comes from a platform sequence (REQ-I-002), so
-    the MAX+1 hold on NCCONTRACT disappears. Customer validation runs
-    before any write. Row contention still surfaces as ``RecordHeldError``
+    the MAX+1 hold on NCCONTRACT disappears. Outcome precedence is CONEW-N's
+    (9904/9905, then 9902, then 9918 after BT): a sold-out cruise answers
+    9902 even for an unknown customer, exactly as ``conew_refactored`` does,
+    so run-compare against the current state holds. Row contention still
+    surfaces as ``RecordHeldError``
     and is resolved by the platform's lock wait (``AdabasSim.submit``) or a
     bounded re-drive (``retry_on_hold``); it and any abend leave through
     ``_on_error`` (BACKOUT TRANSACTION first). The contract is priced from
@@ -514,9 +517,6 @@ def conew_target_state(session, customer_in, cruise_in,
     isn, _ = found[0]
     hooks.after_cruise_read()
 
-    if not _customer_exists(session, customer_id):
-        return _finish(result, MSG_CUSTOMER_NOT_FOUND)
-
     with _on_error(session):
         remaining = session.decrement_if_positive(
             "NCCRUISE", isn, "CRUISE-STATUS")
@@ -527,15 +527,8 @@ def conew_target_state(session, customer_in, cruise_in,
         cruise = session.get_held("NCCRUISE", isn)
         new_id = session.next_id("NCCONTRACT", "CONTRACT-ID")
         hooks.after_maxid_read()
-        session.store("NCCONTRACT", {
-            "CONTRACT-ID": new_id,
-            "PRICE": cruise["PRICE-1W"],
-            "DATE-BOOKING": booking_date,
-            "ID-CRUISE": cruise_id,
-            "ID-CUSTOMER": customer_id,
-        })
-        session.et()
-        return _finish(result, MSG_OK, new_contract_id=new_id)
+        return _store_and_commit(session, result, cruise, cruise_id,
+                                 customer_id, booking_date, new_id)
 
 
 @dataclass

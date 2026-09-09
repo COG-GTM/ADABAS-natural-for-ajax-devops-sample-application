@@ -249,6 +249,33 @@ class BoundedRetryTests(unittest.TestCase):
                          "committed")
         self.assertEqual(calls, [1])
 
+    def test_ledger_payload_abend_at_et_backs_the_transaction_out(self):
+        """The ledger payload is evaluated by ET. If it abends, ET must not
+        leave the transaction half-open: holds are released, nothing is
+        applied, the error propagates (ON ERROR sees a backed-out session)
+        and a later session can take the same records."""
+        db = make_db(cruise_status="2")
+        isn = cruise_isn(db)
+        user1 = db.session("user1")
+        begin_booking(user1)
+        user1.store("NCCONTRACT", {"CONTRACT-ID": 500101, "PRICE": 0.0,
+                                    "DATE-BOOKING": 20260820,
+                                    "ID-CRUISE": 196, "ID-CUSTOMER": 1})
+        user1.record_request("req-1", abend("payload failed"))
+
+        with self.assertRaises(AbendError):
+            user1.et()
+
+        self.assertFalse(user1.in_transaction())
+        self.assertEqual((db.hold_table, db.et_count, db.bt_count), ({}, 0, 1))
+        self.assertEqual(cruise_status(db), "2")
+        self.assertEqual(contract_ids(db), [500100])
+        self.assertIsNone(user1.completed_request("req-1"))
+        user2 = db.session("user2")
+        user2.get_held("NCCRUISE", isn)  # not blocked by a leaked hold
+        self.assertEqual(user2.holds, {("NCCRUISE", isn)})
+        user2.backout()
+
     def test_failed_attempt_is_backed_out_before_the_next_one(self):
         """retry_on_hold is BT + re-drive for *any* operation, not only one
         that cleans up after itself: a raw sequence that buffers a STORE and
@@ -1183,6 +1210,27 @@ class TargetStateTests(unittest.TestCase):
                          9902)
         self.assertEqual(cruise_status(db), "1")
         self.assertEqual(db.hold_table, {})
+
+    def test_outcome_precedence_matches_the_current_state(self):
+        """An unknown customer asking for a sold-out cruise gets 9902 from
+        every variant, as CONEW-N answers (capacity is checked before the
+        customer); with capacity left the same request gets 9918 and the
+        buffered decrement is backed out. No variant re-orders the codes."""
+        variants = {
+            "refactored": nm.conew_refactored,
+            "with_retry": nm.conew_with_retry,
+            "optimistic": nm.conew_optimistic,
+            "target_state": nm.conew_target_state,
+        }
+        for status, expected in (("0", 9902), ("1", 9918)):
+            for name, variant in variants.items():
+                db = make_db(cruise_status=status)
+                res = variant(db.session("user"), "99999999", "196")
+                self.assertEqual((name, status, res.msg_nr),
+                                 (name, status, expected))
+                self.assertEqual(cruise_status(db), status)
+                self.assertEqual(contract_ids(db), [500100])
+                self.assertEqual(db.hold_table, {})
 
 
 if __name__ == "__main__":

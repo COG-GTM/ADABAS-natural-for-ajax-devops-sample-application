@@ -288,6 +288,20 @@ extended (`tests/test_retry.py:test_exhaustion_can_opt_into_distinct_target_stat
 shows the opt-in; `test_customer_not_found_and_sold_out_codes_are_preserved`
 shows the preserved set on the target-state model).
 
+**Outcome precedence is preserved too.** Preserving the *set* of codes is
+not enough for run-compare: a request can fail more than one check, and
+CONEW-N answers with the first one in its statement order — identifier
+edits (9904/9905), then the cruise's capacity (9902), then the customer
+(9918, after BT), then the store/ET. An unknown customer asking for a
+sold-out cruise therefore gets 9902, not 9918. Every model in this PR keeps
+that order (`conew_target_state` checks capacity with the atomic decrement
+*before* it looks the customer up, and backs the decrement out on 9918);
+`test_outcome_precedence_matches_the_current_state` proves it for all four
+variants. Validating the customer before the first write would be a
+reasonable target-state simplification (no write for an invalid request),
+but it changes the answer for that one input class and is therefore *not*
+proposed here — it would need its own equivalence-test waiver.
+
 ## Mapping to business rules and requirements
 
 | Rule / requirement | Current-state proof | Option 1 | Option 2 | Option 3 | Option 4 | Option 5 | Recommendation |
@@ -370,7 +384,9 @@ Target-state proofs added by this work, per requirement (all in
   claim is returned to the claimant instead of being booked twice; the
   entry — a dict or a callable evaluated at ET, so it can describe the
   contract the same ET stores — is copied into the ledger by that ET; a
-  duplicate at ET is refused with `DuplicateRequestError` after a BT).
+  duplicate at ET is refused with `DuplicateRequestError` after a BT, and
+  a payload that fails to evaluate is backed out the same way before the
+  error propagates — ET never leaves a half-open transaction).
   `conew_with_retry` binds the entry to a fingerprint of the request's
   inputs and raises `RequestMismatchError` when a re-used id presents
   different inputs; a `DuplicateRequestError` at ET (a claim path that
