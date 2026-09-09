@@ -603,7 +603,14 @@ class AdabasSim:
         """``key`` was released: hand it to the oldest waiter. The rest stay
         queued, so a session that arrives while that waiter runs (even one
         it submits itself) queues behind them; they get their turn from the
-        waiter's own ET/BT, or right away if it did not take ``key``."""
+        waiter's own ET/BT, or right away if it let ``key`` go.
+
+        The hand-off is a grant: the waiter owns ``key`` *before* it is
+        re-driven, so whatever its restarted callable does before it reaches
+        the blocked statement (hooks, submitting other sessions) cannot lose
+        it the record — the re-hold finds the session already the owner. A
+        grant the waiter never uses is released with its transaction like
+        any other hold (ET/BT, or the backout of its own abend/timeout)."""
         while key not in self.hold_table:
             waiters = self.hold_queue.get(key)
             if not waiters:
@@ -613,4 +620,6 @@ class AdabasSim:
                 del self.hold_queue[key]
             self._parked.pop(ticket.session, None)
             ticket.key = None
+            self.hold_table[key] = ticket.session
+            ticket.session.holds.add(key)
             self._drive(ticket)

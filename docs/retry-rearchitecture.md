@@ -379,9 +379,11 @@ Target-state proofs added by this work, per requirement (all in
   is not backed out twice).
 * `AdabasSim(wait_limit=N)` + `submit(session, operation)` — hold-queue
   mode. A parked `WaitTicket` is re-driven, in FIFO order, when the holder
-  issues ET or BT: the record is handed to the *oldest* waiter only, the
-  rest stay queued ahead of any newcomer (one submitted while that waiter
-  runs parks behind them) and get their turn from its ET/BT. `wait_limit`
+  issues ET or BT: the record is *granted* to the oldest waiter (it owns
+  the hold before its callable is re-run, so nothing the restarted callable
+  does before the blocked statement can lose it the record), the rest stay
+  queued ahead of any newcomer (one submitted while that waiter runs parks
+  behind them) and get their turn from its ET/BT. `wait_limit`
   is a budget in wait units: a unit is spent
   on every re-park and on every `AdabasSim.tick()` (the simulated clock),
   so a ticket times out with `HoldTimeoutError` both when it keeps meeting

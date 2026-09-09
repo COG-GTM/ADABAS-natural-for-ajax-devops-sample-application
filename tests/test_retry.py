@@ -973,6 +973,44 @@ class HoldQueueWaitTests(unittest.TestCase):
         self.assertEqual(db.hold_table, {})
         self.assertEqual(db.waiting(), [])
 
+    def test_resumed_waiter_owns_the_record_before_it_reruns(self):
+        """A re-drive restarts the callable, so there is a window between
+        the release and the waiter's re-hold. The hand-off is a grant: the
+        waiter already owns the record in that window, so a newcomer it
+        submits *before* re-holding (a hook, another session's arrival) parks
+        behind it instead of taking the record and re-parking the waiter."""
+        db = make_db(cruise_status="3")
+        user1, user2, user3 = (db.session(n) for n in ("user1", "user2", "user3"))
+        isn = begin_booking(user1)
+        key = ("NCCRUISE", isn)
+        tickets, seen = {}, []
+
+        def user2_books():
+            if "u2" in tickets and "u3" not in tickets:  # the re-drive
+                seen.append((db.hold_table.get(key), list(user2.holds)))
+                tickets["u3"] = db.submit(
+                    user3, lambda: nm.conew_hold_and_wait(user3, "10000002", "196"))
+                seen.append([t.session.name for t in db.waiting()])
+            held = user2.get_held("NCCRUISE", isn)
+            user2.update("NCCRUISE", isn,
+                         {"CRUISE-STATUS": str(int(held["CRUISE-STATUS"]) - 1)})
+            user2.et()
+            return "booked"
+
+        tickets["u2"] = db.submit(user2, user2_books)
+        self.assertFalse(tickets["u2"].done)
+
+        commit_booking(user1)
+
+        self.assertEqual(seen, [(user2, [key]), ["user3"]])
+        self.assertEqual((tickets["u2"].result, tickets["u2"].attempts),
+                         ("booked", 2))
+        self.assertEqual((nm.booking_outcome(tickets["u3"]).msg_nr,
+                          tickets["u3"].attempts), (9800, 2))
+        self.assertEqual(cruise_status(db), "0")
+        self.assertEqual(db.hold_table, {})
+        self.assertEqual(db.waiting(), [])
+
     def test_interleaved_cruise_and_contract_holds_resolve(self):
         """user1 holds both hotspots (cruise 196 + highest contract). user2
         (cruise 1484) takes its own cruise and parks on the contract record
