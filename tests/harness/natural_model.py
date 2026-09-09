@@ -332,7 +332,8 @@ def conew_with_retry(session, customer_in, cruise_in, booking_date=20260820,
     ``conew_refactored``.
 
     Every attempt is a complete transaction: ``conew_refactored`` backs out
-    before surfacing ``RecordHeldError``, so nothing buffered or held
+    before surfacing ``RecordHeldError``, and ``retry_on_hold`` backs out
+    whatever a failed attempt might still hold, so nothing buffered or held
     survives into the next attempt. ``before_retry(attempt, error)`` is the
     backoff/jitter point (the simulation never sleeps). When ``attempts``
     is spent the caller receives ``exhausted_msg`` (9902 by default, or
@@ -398,7 +399,7 @@ def conew_with_retry(session, customer_in, cruise_in, booking_date=20260820,
         return res
 
     try:
-        return retry_on_hold(attempt_once, attempts, before_retry)
+        return retry_on_hold(attempt_once, session, attempts, before_retry)
     except RetryBudgetExhausted as exc:
         result = _finish(BookingResult(), exhausted_msg)
         result.attempts = exc.attempts

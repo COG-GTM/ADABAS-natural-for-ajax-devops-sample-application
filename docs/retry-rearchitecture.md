@@ -312,14 +312,21 @@ Target-state proofs added by this work, per requirement (all in
 | BR-011 / REQ-I-003 | backout leaves no hold, no decrement; abend mid-retry backs out | `test_backout_on_retry_leaves_no_dangling_state`, `test_abend_mid_retry_backs_out_cleanly`, `test_customer_not_found_during_retry_still_backs_out` |
 | BR-011 | idempotent re-drive after a committed ET; concurrent same-id submits book once; the ledger entry is complete in the committing ET and bound to the request's inputs | `test_completed_attempt_is_never_redriven`, `test_redrive_with_same_request_id_replays_committed_outcome`, `test_failed_request_is_not_recorded_and_can_be_redriven`, `test_concurrent_same_request_id_books_once_and_replays`, `test_same_request_id_retry_finds_the_replay`, `test_waiter_resumed_by_ledger_release_sees_complete_outcome`, `test_reused_request_id_with_different_inputs_is_rejected`, `test_commit_between_lookup_and_claim_is_replayed_not_rebooked`, `test_duplicate_at_et_is_backed_out_and_replayed`, `test_ledger_uniqueness_is_enforced_at_et` |
 | BR-011 / REQ-I-003 | an abend after the decrement or after the identifier backs out in every variant; a waiter's abend stays with the waiter | `test_abend_after_swap_backs_out`, `test_abend_after_decrement_backs_out`, `test_resumed_waiter_abend_stays_with_the_waiter` |
+| BR-011 | a failed BT + re-drive attempt, and an exhausted budget, leave nothing buffered for a later ET; a hold-queue re-drive applies pre-conflict work once | `test_failed_attempt_is_backed_out_before_the_next_one`, `test_exhausted_retry_leaves_nothing_to_commit`, `test_resumed_waiter_does_not_repeat_its_pre_conflict_work` |
 | REQ-N-002 | no starvation / no deadlock under interleaved holds; a bounded wait expires even behind a holder that never releases | `test_fifo_hold_queue_is_fair_and_starvation_free`, `test_wait_for_cycle_is_detected_instead_of_blocking_forever`, `test_model_releases_before_waiting_so_no_cycle_forms`, `test_bounded_wait_gives_up_after_repeated_reparking`, `test_bounded_wait_expires_behind_a_holder_that_never_releases`, `test_simultaneous_timeouts_do_not_resume_each_other` |
 
 ## What the harness adds (and what it does not)
 
 `tests/harness/adabas_sim.py`:
 
-* `retry_on_hold(operation, attempts, before_retry)` — bounded re-drive of
-  any callable on `RecordHeldError`; raises `RetryBudgetExhausted`.
+* `retry_on_hold(operation, session, attempts, before_retry)` — bounded
+  BT + re-drive of any callable on `RecordHeldError`; raises
+  `RetryBudgetExhausted`. The helper owns the rollback: whatever a failed
+  attempt left buffered or held on `session` is backed out before
+  `before_retry`, before the next attempt and before the exhaustion error,
+  so an operation that does not clean up after itself still cannot carry
+  one attempt's STORE into the next (an operation that already backed out
+  is not backed out twice).
 * `AdabasSim(wait_limit=N)` + `submit(session, operation)` — hold-queue
   mode. A parked `WaitTicket` is re-driven, in FIFO order, when the holder
   issues ET or BT. `wait_limit` is a budget in wait units: a unit is spent
@@ -331,6 +338,16 @@ Target-state proofs added by this work, per requirement (all in
   wait-for cycle ends with `DeadlockError` instead of hanging. A waiter that abends when
   re-driven is backed out and its exception recorded on the ticket; the
   holder's ET/BT that resumed it returns normally.
+
+  A Python callable cannot be resumed at the statement that blocked, so a
+  re-drive runs the callable again from its start. To make that equal to
+  a resume, the ticket records the session's buffered writes at `submit`
+  and a re-drive restores that checkpoint first: the failed run's STOREs
+  and UPDATEs are discarded and produced once more by the re-run, work
+  buffered *before* the submit is kept, and holds acquired by the failed
+  run are kept as a waiting user's are. The callable must therefore be
+  deterministic; side effects outside the session (hooks) run once per
+  attempt (`WaitTicket.attempts`).
 
   Re-driving happens synchronously inside the holder's `et()`/`backout()`
   call. That is a scheduling convenience of a single-threaded simulator,

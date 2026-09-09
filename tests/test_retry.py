@@ -238,14 +238,71 @@ class BoundedRetryTests(unittest.TestCase):
 
     def test_completed_attempt_is_never_redriven(self):
         """retry_on_hold treats any returned value as terminal."""
+        db = make_db()
         calls = []
 
         def operation(attempt):
             calls.append(attempt)
             return "committed"
 
-        self.assertEqual(retry_on_hold(operation, attempts=5), "committed")
+        self.assertEqual(retry_on_hold(operation, db.session("user"), attempts=5),
+                         "committed")
         self.assertEqual(calls, [1])
+
+    def test_failed_attempt_is_backed_out_before_the_next_one(self):
+        """retry_on_hold is BT + re-drive for *any* operation, not only one
+        that cleans up after itself: a raw sequence that buffers a STORE and
+        then meets a hold is backed out before ``before_retry`` runs, so the
+        successful attempt commits its own STORE exactly once."""
+        db = make_db(cruise_status="5")
+        user1, user2 = db.session("user1"), db.session("user2")
+        isn = begin_booking(user1)
+        seen = []
+
+        def raw_booking(attempt):
+            user2.store("NCCONTRACT", {"CONTRACT-ID": 900001, "PRICE": 0.0,
+                                       "DATE-BOOKING": 20260820,
+                                       "ID-CRUISE": 196,
+                                       "ID-CUSTOMER": 10000002})
+            held = user2.get_held("NCCRUISE", isn)  # conflicts on attempt 1
+            user2.update("NCCRUISE", isn,
+                         {"CRUISE-STATUS": str(int(held["CRUISE-STATUS"]) - 1)})
+            user2.et()
+            return attempt
+
+        def competitor_commits(attempt, err):
+            seen.append((user2.pending_stores("NCCONTRACT"), set(user2.holds),
+                         db.bt_count))
+            commit_booking(user1)
+
+        self.assertEqual(retry_on_hold(raw_booking, user2, attempts=2,
+                                       before_retry=competitor_commits), 2)
+        self.assertEqual(seen, [([], set(), 1)])  # backed out before the retry
+        self.assertEqual(contract_ids(db).count(900001), 1)
+        self.assertEqual(cruise_status(db), "3")  # one decrement each
+        self.assertEqual((db.et_count, db.hold_table), (2, {}))
+
+    def test_exhausted_retry_leaves_nothing_to_commit(self):
+        """retry_on_hold backs out the last attempt's buffered work before
+        raising RetryBudgetExhausted: a later ET on the same session commits
+        nothing stale."""
+        db = make_db(cruise_status="5")
+        user1, user2 = db.session("user1"), db.session("user2")
+        isn = begin_booking(user1)  # never releases
+        baseline = contract_ids(db)
+
+        def raw_booking(attempt):
+            user2.store("NCCONTRACT", {"CONTRACT-ID": 900000 + attempt,
+                                       "ID-CRUISE": 196, "ID-CUSTOMER": 1})
+            user2.get_held("NCCRUISE", isn)
+
+        with self.assertRaises(RetryBudgetExhausted):
+            retry_on_hold(raw_booking, user2, attempts=3)
+        self.assertEqual(db.bt_count, 3)  # one BT per failed attempt
+        self.assertFalse(user2.in_transaction())
+        user2.et()  # an unrelated later ET has nothing stale to apply
+        self.assertEqual(contract_ids(db), baseline)
+        self.assertEqual(db.hold_table, {("NCCRUISE", isn): user1})
 
     def test_redrive_with_same_request_id_replays_committed_outcome(self):
         """A caller that lost the response and re-drives the same request
@@ -675,6 +732,40 @@ class HoldQueueWaitTests(unittest.TestCase):
         commit_booking(holder)
         self.assertEqual((cruise_status(db), db.hold_table), ("4", {}))
 
+    def test_resumed_waiter_does_not_repeat_its_pre_conflict_work(self):
+        """A re-drive equals a resume: work the operation buffered before it
+        blocked (a STORE) is discarded and re-done once by the re-run, and
+        work the session had buffered *before* ``submit`` is kept. One
+        submission, one contract per STORE, one decrement."""
+        db = make_db(cruise_status="5")
+        user1, user2 = db.session("user1"), db.session("user2")
+        isn = begin_booking(user1)
+        row = {"PRICE": 0.0, "DATE-BOOKING": 20260820,
+               "ID-CRUISE": 196, "ID-CUSTOMER": 10000002}
+        user2.store("NCCONTRACT", dict(row, **{"CONTRACT-ID": 900000}))  # pre-submit
+        runs = []
+
+        def raw_booking():
+            runs.append(len(user2.pending_stores("NCCONTRACT")))
+            user2.store("NCCONTRACT", dict(row, **{"CONTRACT-ID": 900001}))
+            held = user2.get_held("NCCRUISE", isn)  # blocks on the first run
+            user2.update("NCCRUISE", isn,
+                         {"CRUISE-STATUS": str(int(held["CRUISE-STATUS"]) - 1)})
+            user2.et()
+
+        ticket = db.submit(user2, raw_booking)
+        self.assertFalse(ticket.done)
+        self.assertEqual(len(user2.pending_stores("NCCONTRACT")), 2)  # parked as-is
+
+        commit_booking(user1)  # resumes user2
+
+        self.assertEqual((ticket.done, ticket.error, ticket.attempts), (True, None, 2))
+        self.assertEqual(runs, [1, 1])  # the re-run started from the checkpoint
+        self.assertEqual(contract_ids(db).count(900000), 1)
+        self.assertEqual(contract_ids(db).count(900001), 1)
+        self.assertEqual(cruise_status(db), "3")  # user1's and user2's decrement
+        self.assertEqual((db.et_count, db.hold_table), (2, {}))
+
     def test_fifo_hold_queue_is_fair_and_starvation_free(self):
         """Three waiters on the last two places resume in arrival order:
         the first two book, the third gets 9902, nobody is left parked."""
@@ -964,7 +1055,7 @@ class TargetStateTests(unittest.TestCase):
 
         with self.assertRaises(RetryBudgetExhausted) as ctx:
             retry_on_hold(lambda attempt: nm.conew_target_state(
-                user2, "10000002", "196"), attempts=2)
+                user2, "10000002", "196"), user2, attempts=2)
 
         self.assertEqual(ctx.exception.attempts, 2)
         self.assertEqual(user2.holds, set())

@@ -74,14 +74,20 @@ class RetryBudgetExhausted(Exception):
         self.last_error = last_error
 
 
-def retry_on_hold(operation, attempts=3, before_retry=None):
-    """Run ``operation(attempt)`` until it returns, retrying on a hold conflict.
+def retry_on_hold(operation, session, attempts=3, before_retry=None):
+    """BT + re-drive: run ``operation(attempt)`` on ``session`` until it
+    returns, retrying on a hold conflict.
 
+    Every failed attempt is a complete transaction: whatever it left
+    buffered or held is backed out (``session.backout()``) before
+    ``before_retry`` runs and before the next attempt, and once more before
+    ``RetryBudgetExhausted`` is raised, so no attempt can commit another
+    attempt's work. An operation that already backed out is not backed out
+    a second time.
     ``attempts`` bounds the total number of invocations (1 = no retry).
     ``before_retry(attempt, error)`` is called between attempts; tests use it
     to interleave the competitor (or to model backoff) at exactly that point.
     A returned value is terminal: a completed attempt is never re-driven.
-    Raises ``RetryBudgetExhausted`` once the budget is spent.
     """
     if attempts < 1:
         raise ValueError("attempts must be at least 1")
@@ -91,6 +97,8 @@ def retry_on_hold(operation, attempts=3, before_retry=None):
             return operation(attempt)
         except RecordHeldError as exc:
             last = exc
+            if session.in_transaction():
+                session.backout()
             if attempt < attempts and before_retry is not None:
                 before_retry(attempt, exc)
     raise RetryBudgetExhausted(attempts, last)
@@ -103,12 +111,15 @@ class WaitTicket:
     abandoned (``error``: ``HoldTimeoutError``, ``DeadlockError`` or the
     operation's own exception, after its transaction was backed out);
     ``waits`` is the wait budget consumed (re-parks + clock ticks);
-    ``attempts`` how often it ran.
+    ``attempts`` how often it ran. ``checkpoint`` is the session's buffered
+    work at submission; a re-drive restores it first (see
+    ``AdabasSim._drive``).
     """
 
     def __init__(self, session, operation):
         self.session = session
         self.operation = operation
+        self.checkpoint = session._checkpoint()
         self.key = None
         self.result = None
         self.error = None
@@ -290,6 +301,24 @@ class Session:
         return [dict(row) for name, row in self._pending_stores
                 if name == file_name]
 
+    def in_transaction(self):
+        """True while the session holds a record or has buffered work."""
+        return bool(self.holds or self._pending_updates
+                    or self._pending_stores or self._pending_requests)
+
+    def _checkpoint(self):
+        """Copy of the buffered (not yet committed) writes."""
+        return (copy.deepcopy(self._pending_updates),
+                copy.deepcopy(self._pending_stores),
+                list(self._pending_requests))
+
+    def _restore(self, checkpoint):
+        """Put the buffered writes back to ``checkpoint``; holds are kept."""
+        updates, stores, requests = checkpoint
+        self._pending_updates = copy.deepcopy(updates)
+        self._pending_stores = copy.deepcopy(stores)
+        self._pending_requests = list(requests)
+
     # -- transaction end -----------------------------------------------
 
     def et(self):
@@ -374,6 +403,15 @@ class AdabasSim:
         The parked session keeps whatever holds it already owns (as a real
         session waiting in the hold queue does), which is why a wait cycle
         is possible and is detected as ``DeadlockError``.
+
+        A Python callable cannot resume at the statement that blocked, so
+        a re-drive runs ``operation`` again from its start. To make that
+        equal to a resume, the writes the failed run buffered are discarded
+        first (the session's buffers go back to what they were at
+        ``submit``; holds are kept, as a waiting user's are): a store or
+        update before the conflict point is applied once, not once per run.
+        The operation must therefore be deterministic; side effects outside
+        the session (hooks, counters) do run once per attempt.
         """
         ticket = WaitTicket(session, operation)
         self._drive(ticket)
@@ -421,7 +459,10 @@ class AdabasSim:
         """Run the ticket once. A hold conflict parks it; any other exception
         is the waiter's own abend: it is recorded on the ticket and the
         waiter's transaction is backed out, so a failure in a resumed waiter
-        never surfaces through the holder's ET/BT that resumed it."""
+        never surfaces through the holder's ET/BT that resumed it.
+        A re-drive first drops what the previous run buffered."""
+        if ticket.attempts:
+            ticket.session._restore(ticket.checkpoint)
         ticket.attempts += 1
         try:
             ticket.result = ticket.operation()
