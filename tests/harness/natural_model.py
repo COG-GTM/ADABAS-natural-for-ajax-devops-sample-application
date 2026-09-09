@@ -139,9 +139,12 @@ class Hooks:
     reproducing a multi-user interleaving deterministically.
     """
 
-    def __init__(self, after_status_read=None, after_maxid_read=None):
+    def __init__(self, after_status_read=None, after_maxid_read=None,
+                 after_cruise_read=None):
         self.after_status_read = after_status_read or (lambda: None)
         self.after_maxid_read = after_maxid_read or (lambda: None)
+        # target-state variants only: after the unheld FIND, before the write
+        self.after_cruise_read = after_cruise_read or (lambda: None)
 
 
 def conew_original(session, customer_in, cruise_in, booking_date=20260820,
@@ -433,8 +436,11 @@ def conew_optimistic(session, customer_in, cruise_in, booking_date=20260820,
     code did) but the decrement is applied with ``update_if`` guarded by
     that value, so a lost update is impossible: a stale guard — or a hold
     conflict while acquiring the row — backs out, re-reads and retries.
-    After ``attempts`` failed swaps the caller gets 9902. An abend anywhere
-    in the loop takes the ON ERROR path (``_on_error``).
+    The guard covers CRUISE-STATUS only, so once the swap holds the row the
+    record is re-read under that hold and the contract is priced from the
+    held copy, never from the unheld snapshot. After ``attempts`` failed
+    swaps the caller gets 9902. An abend anywhere in the loop takes the ON
+    ERROR path (``_on_error``).
     """
     hooks = hooks or Hooks()
     result = BookingResult()
@@ -449,6 +455,7 @@ def conew_optimistic(session, customer_in, cruise_in, booking_date=20260820,
     if not found:
         return _finish(result, msg_nr)
     isn, cruise = found[0]
+    hooks.after_cruise_read()
 
     with _on_error(session):
         for attempt in range(1, attempts + 1):
@@ -462,6 +469,7 @@ def conew_optimistic(session, customer_in, cruise_in, booking_date=20260820,
                     "NCCRUISE", isn, "CRUISE-STATUS", guard,
                     {"CRUISE-STATUS": str(int(guard) - 1)})
                 if swapped:
+                    cruise = session.get_held("NCCRUISE", isn)
                     new_id = _max_plus_one_held(session)
                     if new_id is None:
                         session.backout()
@@ -487,7 +495,9 @@ def conew_target_state(session, customer_in, cruise_in,
     before any write. Row contention still surfaces as ``RecordHeldError``
     and is resolved by the platform's lock wait (``AdabasSim.submit``) or a
     bounded re-drive (``retry_on_hold``); it and any abend leave through
-    ``_on_error`` (BACKOUT TRANSACTION first).
+    ``_on_error`` (BACKOUT TRANSACTION first). The contract is priced from
+    the row as re-read under the decrement's hold, not from the unheld
+    FIND.
     """
     hooks = hooks or Hooks()
     result = BookingResult(attempts=1)
@@ -501,7 +511,8 @@ def conew_target_state(session, customer_in, cruise_in,
     found = session.find("NCCRUISE", "CRUISE-ID", cruise_id)
     if not found:
         return _finish(result, msg_nr)
-    isn, cruise = found[0]
+    isn, _ = found[0]
+    hooks.after_cruise_read()
 
     if not _customer_exists(session, customer_id):
         return _finish(result, MSG_CUSTOMER_NOT_FOUND)
@@ -513,6 +524,7 @@ def conew_target_state(session, customer_in, cruise_in,
         if remaining is None:
             session.backout()
             return _finish(result, MSG_NOT_AVAILABLE)
+        cruise = session.get_held("NCCRUISE", isn)
         new_id = session.next_id("NCCONTRACT", "CONTRACT-ID")
         hooks.after_maxid_read()
         session.store("NCCONTRACT", {

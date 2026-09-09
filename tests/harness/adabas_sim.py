@@ -170,6 +170,7 @@ class Session:
         self._pending_updates = {}
         self._pending_stores = []
         self._pending_requests = []
+        self._transaction = 0  # bumped by every ET/BT
 
     # -- reads ---------------------------------------------------------
 
@@ -230,9 +231,19 @@ class Session:
 
     # -- retry-architecture primitives ----------------------------------
 
+    def _current(self, file_name, isn, field):
+        """The value of ``field`` as this transaction sees it: its own
+        buffered update if any, else the committed value (a relational
+        ``UPDATE ... WHERE`` reads through the transaction's earlier writes)."""
+        pending = self._pending_updates.get((file_name, isn), {})
+        if field in pending:
+            return pending[field]
+        return self.db.files[file_name].records[isn][field]
+
     def update_if(self, file_name, isn, field, expected, new_values):
-        """Compare-and-swap: apply ``new_values`` only if the committed value
-        of ``field`` still equals ``expected``.
+        """Compare-and-swap: apply ``new_values`` only if the value of
+        ``field`` (committed, or this transaction's own pending update)
+        still equals ``expected``.
 
         Returns True and leaves the record held (until ET/BT) on success;
         returns False and leaves no hold behind when the guard fails. May
@@ -241,7 +252,7 @@ class Session:
         key = (file_name, isn)
         newly_held = key not in self.holds
         self.hold(file_name, isn)
-        if self.db.files[file_name].records[isn][field] != expected:
+        if self._current(file_name, isn, field) != expected:
             if newly_held:
                 self.release(file_name, isn)
             return False
@@ -253,13 +264,15 @@ class Session:
         (``UPDATE ... SET f = f - 1 WHERE f > 0`` on a relational target).
 
         Returns the new value, or None when the counter was already zero
-        (in which case no hold is left behind). Contention on the row is
-        still a hold conflict, as it is a row lock on a relational engine.
+        (in which case no hold is left behind). Repeated calls in one
+        transaction each consume one unit (the second reads the first's
+        pending value). Contention on the row is still a hold conflict, as
+        it is a row lock on a relational engine.
         """
         key = (file_name, isn)
         newly_held = key not in self.holds
         self.hold(file_name, isn)
-        current = int(self.db.files[file_name].records[isn][field])
+        current = int(self._current(file_name, isn, field))
         if current <= 0:
             if newly_held:
                 self.release(file_name, isn)
@@ -307,15 +320,26 @@ class Session:
                     or self._pending_stores or self._pending_requests)
 
     def _checkpoint(self):
-        """Copy of the buffered (not yet committed) writes."""
-        return (copy.deepcopy(self._pending_updates),
+        """Copy of the buffered (not yet committed) writes, tagged with the
+        transaction they belong to."""
+        return (self._transaction,
+                copy.deepcopy(self._pending_updates),
                 copy.deepcopy(self._pending_stores),
                 list(self._pending_requests))
 
     def _restore(self, checkpoint):
-        """Put the buffered writes back to ``checkpoint``; holds are kept."""
-        updates, stores, requests = checkpoint
-        self._pending_updates = copy.deepcopy(updates)
+        """Put the buffered writes back to ``checkpoint``; holds are kept.
+
+        A checkpoint belongs to one transaction: if that transaction has
+        since ended (the operation issued ET or BT, releasing its holds),
+        there is nothing to put back — the writes went with it. An update
+        is only ever restored for a record this session still holds."""
+        transaction, updates, stores, requests = checkpoint
+        if transaction != self._transaction:
+            return
+        self._pending_updates = {key: copy.deepcopy(values)
+                                 for key, values in updates.items()
+                                 if key in self.holds}
         self._pending_stores = copy.deepcopy(stores)
         self._pending_requests = list(requests)
 
@@ -349,6 +373,7 @@ class Session:
         self._reset()
 
     def _reset(self):
+        self._transaction += 1
         self._pending_updates = {}
         self._pending_stores = []
         self._pending_requests = []

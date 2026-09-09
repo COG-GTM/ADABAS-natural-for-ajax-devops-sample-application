@@ -766,6 +766,37 @@ class HoldQueueWaitTests(unittest.TestCase):
         self.assertEqual(cruise_status(db), "3")  # user1's and user2's decrement
         self.assertEqual((db.et_count, db.hold_table), (2, {}))
 
+    def test_checkpoint_dies_with_the_transaction_that_backed_out(self):
+        """user2 has an uncommitted re-pricing of cruise 1484 when it submits
+        a booking for 196. The booking meets user1's hold and, as CONEW-N
+        does, backs out: that BT ends user2's transaction, releasing 1484
+        and discarding the re-pricing. A competitor then re-prices 1484 and
+        commits. When user2 is resumed its checkpoint must not resurrect
+        the discarded update (it no longer holds 1484), so the resumed
+        booking's ET cannot overwrite the competitor's commit."""
+        db = make_db(cruise_status="5")
+        other = cruise_isn(db, 1484)
+        user1, user2 = db.session("user1"), db.session("user2")
+        begin_booking(user1)
+        user2.update("NCCRUISE", other, {"PRICE-1W": 111.0})  # pre-submit
+
+        ticket = db.submit(
+            user2, lambda: nm.conew_refactored(user2, "10000002", "196"))
+        self.assertFalse(ticket.done)
+        self.assertEqual(user2.holds, set())  # the model's BT released 1484
+
+        pricing = db.session("pricing")
+        pricing.update("NCCRUISE", other, {"PRICE-1W": 222.0})
+        pricing.et()
+        commit_booking(user1)  # resumes user2
+
+        self.assertEqual((ticket.done, ticket.error, ticket.result.msg_nr),
+                         (True, None, 9800))
+        self.assertEqual(
+            db.files["NCCRUISE"].records[other]["PRICE-1W"], 222.0)
+        self.assertEqual(cruise_status(db), "3")
+        self.assertEqual(db.hold_table, {})
+
     def test_fifo_hold_queue_is_fair_and_starvation_free(self):
         """Three waiters on the last two places resume in arrival order:
         the first two book, the third gets 9902, nobody is left parked."""
@@ -921,6 +952,29 @@ class OptimisticRetryTests(unittest.TestCase):
         self.assertEqual(cruise_status(db), "0")
         self.assertEqual(db.hold_table, {})
 
+    def test_price_change_between_read_and_swap_is_not_booked_stale(self):
+        """The guard covers CRUISE-STATUS only. A competitor re-prices the
+        cruise between the unheld read and the swap; the swap still succeeds
+        (capacity unchanged) but the contract must carry the price as
+        re-read under the hold, not the snapshot's."""
+        db = make_db(cruise_status="3")
+        isn = cruise_isn(db)
+        pricing = db.session("pricing")
+
+        def competitor_reprices():
+            if not pricing.in_transaction() and db.et_count == 0:
+                pricing.update("NCCRUISE", isn, {"PRICE-1W": 9999.0})
+                pricing.et()
+
+        user1 = db.session("user1")
+        first = nm.conew_optimistic(
+            user1, "10000001", "196",
+            hooks=nm.Hooks(after_status_read=competitor_reprices))
+
+        self.assertEqual((first.msg_nr, first.attempts), (9800, 1))
+        self.assertEqual(contracts_for(db, 196)[-1]["PRICE"], 9999.0)
+        self.assertEqual(cruise_status(db), "2")
+
     def test_stale_guard_retries_and_succeeds_when_capacity_remains(self):
         db = make_db(cruise_status="2")
         user2 = db.session("user2")
@@ -1012,6 +1066,45 @@ class TargetStateTests(unittest.TestCase):
         self.assertEqual([o.msg_nr for o in outcomes], [9800, 9902, 9902])
         self.assertEqual(cruise_status(db), "0")
         self.assertEqual(db.hold_table, {})
+
+    def test_repeated_conditional_decrements_each_consume_one_unit(self):
+        """Within one transaction decrement_if_positive reads through its own
+        pending write: two decrements take two places, the third finds zero,
+        and ET commits the count the transaction saw."""
+        db = make_db(cruise_status="2")
+        isn = cruise_isn(db)
+        user = db.session("user")
+
+        taken = [user.decrement_if_positive("NCCRUISE", isn, "CRUISE-STATUS")
+                 for _ in range(3)]
+
+        self.assertEqual(taken, [1, 0, None])
+        self.assertEqual(user.holds, {("NCCRUISE", isn)})  # a refusal keeps
+        self.assertFalse(user.update_if(  # the hold the earlier calls took
+            "NCCRUISE", isn, "CRUISE-STATUS", "2", {"CRUISE-STATUS": "1"}))
+        user.et()
+        self.assertEqual(cruise_status(db), "0")
+        self.assertEqual(db.hold_table, {})
+
+    def test_contract_is_priced_from_the_row_held_by_the_decrement(self):
+        """A competitor re-prices the cruise after the unheld FIND and before
+        the decrement; the contract carries the committed price at the time
+        the row was held, not the FIND snapshot's."""
+        db = make_db(cruise_status="3")
+        isn = cruise_isn(db)
+        pricing = db.session("pricing")
+
+        def competitor_reprices():
+            pricing.update("NCCRUISE", isn, {"PRICE-1W": 9999.0})
+            pricing.et()
+
+        first = nm.conew_target_state(
+            db.session("user1"), "10000001", "196",
+            hooks=nm.Hooks(after_cruise_read=competitor_reprices))
+
+        self.assertEqual(first.msg_nr, 9800)
+        self.assertEqual(contracts_for(db, 196)[-1]["PRICE"], 9999.0)
+        self.assertEqual(cruise_status(db), "2")
 
     def test_sequence_ids_remove_the_contract_hotspot(self):
         """user2 books a different cruise while user1 is between its id

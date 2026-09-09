@@ -113,7 +113,7 @@ after the cap return 9902.
 | R2 MAX+1 | untouched — the fake-`UPDATE` hold is still needed unless combined with Option 4 |
 | Pros | no hold across the decision; readers never block; under low contention one round trip |
 | Cons | Natural has no native compare-and-swap; the guard must be implemented as re-read-in-hold + compare + `UPDATE` (a short hold) or as an ADABAS conditional command; under high contention on one cruise the loop spins and *late arrivals can starve* (no ordering) |
-| Failure modes | livelock on a hot cruise; a guard that compares an `A1` string needs exact normalisation; the retry loop must BT between attempts or the swap's short hold leaks |
+| Failure modes | livelock on a hot cruise; a guard that compares an `A1` string needs exact normalisation; the retry loop must BT between attempts or the swap's short hold leaks; the guard protects *only* the guarded field — every other value the contract copies from the cruise (`PRICE-1W`) must be re-read under the swap's hold, not taken from the unheld snapshot, or a concurrent re-pricing is booked at the old price |
 | Message codes | unchanged; exhaustion → 9902 (or 9936 by opt-in) |
 
 Harness: `Session.update_if` (`tests/harness/adabas_sim.py`), model
@@ -345,9 +345,14 @@ Target-state proofs added by this work, per requirement (all in
   and a re-drive restores that checkpoint first: the failed run's STOREs
   and UPDATEs are discarded and produced once more by the re-run, work
   buffered *before* the submit is kept, and holds acquired by the failed
-  run are kept as a waiting user's are. The callable must therefore be
-  deterministic; side effects outside the session (hooks) run once per
-  attempt (`WaitTicket.attempts`).
+  run are kept as a waiting user's are. The checkpoint belongs to the
+  transaction that was open at `submit`: if the callable itself issued
+  ET or BT before parking (as `conew_refactored` backs out on a conflict),
+  that transaction is over, its holds are gone, and nothing is restored —
+  a pre-submit UPDATE cannot come back without the hold that protected it
+  and overwrite what a competitor committed in the meantime. The callable
+  must therefore be deterministic; side effects outside the session
+  (hooks) run once per attempt (`WaitTicket.attempts`).
 
   Re-driving happens synchronously inside the holder's `et()`/`backout()`
   call. That is a scheduling convenience of a single-threaded simulator,
@@ -355,7 +360,10 @@ Target-state proofs added by this work, per requirement (all in
   what the ticket ended with, what is left in the hold table), never the
   moment at which a waiter ran relative to the holder's return.
 * `Session.update_if` (guarded update), `Session.decrement_if_positive`
-  (atomic conditional decrement), `Session.next_id` (sequence not rolled
+  (atomic conditional decrement) — both read through the transaction's
+  own pending update of the field, as a relational `UPDATE ... WHERE`
+  does, so two decrements in one transaction take two places —,
+  `Session.next_id` (sequence not rolled
   back by BT), `record_request` / `completed_request` (idempotency ledger:
   the id is claimed under a hold and the ledger is read *under that hold*
   — lookup and claim are one step, so a commit landing just before the
