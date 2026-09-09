@@ -409,6 +409,61 @@ def conew_with_retry(session, customer_in, cruise_in, booking_date=20260820,
         return result
 
 
+def conew_hold_and_wait(session, customer_in, cruise_in,
+                        booking_date=20260820, hooks=None):
+    """Option 1: CONEW-N's statements as the nucleus runs them in
+    hold-and-wait mode.
+
+    Same statement order as ``conew_refactored``; the difference is what a
+    hold conflict does. ``conew_refactored`` handles it as a response to
+    the program (BACKOUT TRANSACTION, ``RecordHeldError`` to the caller —
+    a complete transaction ends there, which is what a BT + re-drive loop
+    wants). Here a conflict is not the program's business at all: it is
+    left to the nucleus (``AdabasSim.submit``), which parks the session
+    with its transaction *open* — the holds taken and the writes buffered
+    before the blocked statement stay, exactly as a real session in the
+    hold queue keeps them. That is what makes a wait cycle possible
+    (``DeadlockError``) and why the wait has to be bounded
+    (``HoldTimeoutError`` → BT). Anything other than a hold conflict is
+    ON ERROR: BACKOUT TRANSACTION, then the abend propagates.
+    """
+    hooks = hooks or Hooks()
+    result = BookingResult()
+
+    cruise_id, customer_id, pending = _validate_inputs(
+        customer_in, cruise_in, result)
+    if isinstance(pending, BookingResult):
+        return pending
+    msg_nr = pending
+
+    found = session.find("NCCRUISE", "CRUISE-ID", cruise_id)
+    if not found:
+        return _finish(result, msg_nr)
+    isn, _ = found[0]
+
+    try:
+        cruise = session.get_held("NCCRUISE", isn)  # R1: may park here
+        local_avail = int(cruise["CRUISE-STATUS"])
+        hooks.after_status_read()
+        if local_avail <= 0:
+            session.backout()
+            return _finish(result, MSG_NOT_AVAILABLE)
+        session.update("NCCRUISE", isn,
+                       {"CRUISE-STATUS": str(local_avail - 1)})
+        new_id = _max_plus_one_held(session)  # R2: may park, R1 hold kept
+        if new_id is None:
+            session.backout()
+            return _finish(result, MSG_NOT_AVAILABLE)
+        hooks.after_maxid_read()
+        return _store_and_commit(session, result, cruise, cruise_id,
+                                 customer_id, booking_date, new_id)
+    except RecordHeldError:
+        raise  # the nucleus parks the session; its transaction stays open
+    except Exception:
+        session.backout()  # ON ERROR
+        raise
+
+
 def booking_outcome(ticket, timeout_msg=MSG_NOT_AVAILABLE):
     """Option 1: translate a hold-queue ``WaitTicket`` into a booking result.
 

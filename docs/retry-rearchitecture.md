@@ -78,14 +78,29 @@ abandoned with BT and a defined message code.
 | R2 MAX+1 | unchanged: serialised behind the fake `UPDATE (R2.)` |
 | Pros | smallest delta from production; FIFO fairness comes from the hold queue; no lost updates by construction |
 | Cons | throughput is bounded by the longest-held transaction; both hotspots stay hotspots (every booking on every cruise queues on the single highest `NCCONTRACT` record); a wait budget still needs a message when it is spent |
-| Failure modes | starvation is impossible while FIFO holds; deadlock is possible if two sessions take the two hotspots in opposite order — `CONEW-N` avoids this by always taking `NCCRUISE` before `NCCONTRACT` and by releasing (BT) before it ever waits; a timeout must BT before returning or the cruise hold leaks |
+| Failure modes | starvation is impossible while FIFO holds; a waiting session keeps the holds and buffered writes it already has (that is what "hold-and-wait" means — a booking parked on the highest `NCCONTRACT` record still owns its cruise record), so deadlock is possible if two sessions take the two hotspots in opposite order — `CONEW-N` avoids this by always taking `NCCRUISE` before `NCCONTRACT`; a timeout must BT before returning or the cruise hold leaks |
 | Message codes | 9800/9902/9904/9905/9918/9999 unchanged. Timeout returns **9902 by default** (the customer sees "not available"); optionally a new code `9936` "booking busy, try again" *if* the catalogue is extended — see [Message-code impact](#message-code-impact) |
 
 Harness: `AdabasSim(wait_limit=N)`, `AdabasSim.submit`, `WaitTicket`,
 `HoldTimeoutError`, `DeadlockError` (`tests/harness/adabas_sim.py`);
+`conew_hold_and_wait` is the booking body for this mode and
 `booking_outcome` translates a finished ticket into a `BookingResult`
 (`tests/harness/natural_model.py`). Tests: `tests/test_retry.py`
 `HoldQueueWaitTests`.
+
+`conew_hold_and_wait` has `conew_refactored`'s statements in
+`conew_refactored`'s order; the two differ only in what a hold conflict
+does. `conew_refactored` treats it as a response to the program — BT,
+then `RecordHeldError` to the caller — which ends the transaction *before*
+the session could be parked; wrapped in `submit` that is a BT + re-drive
+(Option 3 semantics), not a wait. `conew_hold_and_wait` leaves the
+conflict to the nucleus: `submit` parks the session with its transaction
+open, so a booking blocked at R2 still owns its cruise record and its
+buffered decrement, and the resumed run finishes that same transaction
+(one ET, no BT, one decrement —
+`test_parked_waiter_keeps_its_open_transaction_and_resumes_it`; the kept
+hold is what a third session runs into, and what the timeout's BT has to
+release — `test_bounded_wait_gives_up_after_repeated_reparking`).
 
 ## Option 2 — Optimistic concurrency with retry loop (compare-and-swap on CRUISE-STATUS)
 
@@ -328,6 +343,7 @@ Target-state proofs added by this work, per requirement (all in
 | BR-011 / REQ-I-003 | an abend after the decrement or after the identifier backs out in every variant; a waiter's abend stays with the waiter | `test_abend_after_swap_backs_out`, `test_abend_after_decrement_backs_out`, `test_resumed_waiter_abend_stays_with_the_waiter` |
 | BR-011 | a failed BT + re-drive attempt, and an exhausted budget, leave nothing buffered for a later ET; a hold-queue re-drive applies pre-conflict work once | `test_failed_attempt_is_backed_out_before_the_next_one`, `test_exhausted_retry_leaves_nothing_to_commit`, `test_resumed_waiter_does_not_repeat_its_pre_conflict_work` |
 | REQ-N-002 | no starvation / no deadlock under interleaved holds; a bounded wait expires even behind a holder that never releases | `test_fifo_hold_queue_is_fair_and_starvation_free`, `test_wait_for_cycle_is_detected_instead_of_blocking_forever`, `test_model_releases_before_waiting_so_no_cycle_forms`, `test_bounded_wait_gives_up_after_repeated_reparking`, `test_bounded_wait_expires_behind_a_holder_that_never_releases`, `test_simultaneous_timeouts_do_not_resume_each_other` |
+| BR-006 / BR-011 | a parked booking keeps its open transaction (cruise hold + buffered decrement) and the resumed run completes *that* transaction | `test_parked_waiter_keeps_its_open_transaction_and_resumes_it`, `test_interleaved_cruise_and_contract_holds_resolve` |
 
 ## What the harness adds (and what it does not)
 
@@ -359,10 +375,12 @@ Target-state proofs added by this work, per requirement (all in
   and a re-drive restores that checkpoint first: the failed run's STOREs
   and UPDATEs are discarded and produced once more by the re-run, work
   buffered *before* the submit is kept, and holds acquired by the failed
-  run are kept as a waiting user's are. The checkpoint belongs to the
-  transaction that was open at `submit`: if the callable itself issued
-  ET or BT before parking (as `conew_refactored` backs out on a conflict),
-  that transaction is over, its holds are gone, and nothing is restored —
+  run are kept as a waiting user's are (`conew_hold_and_wait` blocked at
+  R2 resumes still owning its cruise record). The checkpoint belongs to
+  the transaction that was open at `submit`: if the callable itself issued
+  ET or BT before parking (as `conew_refactored` backs out on a conflict,
+  turning the wait into a BT + re-drive), that transaction is over, its
+  holds are gone, and nothing is restored —
   a pre-submit UPDATE cannot come back without the hold that protected it
   and overwrite what a competitor committed in the meantime. The callable
   must therefore be deterministic; side effects outside the session
@@ -395,7 +413,9 @@ Target-state proofs added by this work, per requirement (all in
   existing `hold`/`update`/`store`/`et`/`backout` semantics are unchanged
   and every pre-existing test runs against the same code.
 
-`tests/harness/natural_model.py`: `conew_with_retry` (Option 3),
+`tests/harness/natural_model.py`: `conew_hold_and_wait` (Option 1 body:
+a hold conflict is the nucleus's, not the program's, so the parked
+transaction stays open), `conew_with_retry` (Option 3),
 `conew_optimistic` (Option 2), `conew_target_state` (Options 4 + 5),
 `booking_outcome` (Option 1 translation), `MSG_BOOKING_BUSY` (proposed
 9936). `conew_original` and `conew_refactored` are untouched.

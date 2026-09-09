@@ -589,7 +589,12 @@ class BoundedRetryTests(unittest.TestCase):
 
 
 class HoldQueueWaitTests(unittest.TestCase):
-    """Option 1: wait in the hold queue, resume at the holder's ET/BT."""
+    """Option 1: wait in the hold queue, resume at the holder's ET/BT.
+
+    The booking body is ``conew_hold_and_wait``: a hold conflict is left
+    to the nucleus, so a parked session keeps its open transaction (holds
+    and buffered writes) while it waits. ``conew_refactored`` backs out
+    before it surfaces a conflict; the tests that use it here say so."""
 
     def test_waiter_resumes_at_holders_et_and_gets_9902_for_last_place(self):
         db = make_db(cruise_status="1")
@@ -598,7 +603,7 @@ class HoldQueueWaitTests(unittest.TestCase):
 
         def competitor_books_at_same_time():
             tickets.append(db.submit(
-                user2, lambda: nm.conew_refactored(user2, "10000002", "196")))
+                user2, lambda: nm.conew_hold_and_wait(user2, "10000002", "196")))
             self.assertFalse(tickets[0].done)  # parked, not failed
 
         user1 = db.session("user1")
@@ -620,7 +625,7 @@ class HoldQueueWaitTests(unittest.TestCase):
         tickets = []
         user1 = db.session("user1")
         hooks = nm.Hooks(after_status_read=lambda: tickets.append(db.submit(
-            user2, lambda: nm.conew_refactored(user2, "10000002", "196"))))
+            user2, lambda: nm.conew_hold_and_wait(user2, "10000002", "196"))))
 
         first = nm.conew_refactored(user1, "10000001", "196", hooks=hooks)
         second = nm.booking_outcome(tickets[0])
@@ -638,7 +643,7 @@ class HoldQueueWaitTests(unittest.TestCase):
         begin_booking(user1)
 
         ticket = db.submit(
-            user2, lambda: nm.conew_refactored(user2, "10000002", "196"))
+            user2, lambda: nm.conew_hold_and_wait(user2, "10000002", "196"))
 
         self.assertIsInstance(ticket.error, HoldTimeoutError)
         self.assertEqual(ticket.error.holder, user1)
@@ -650,9 +655,11 @@ class HoldQueueWaitTests(unittest.TestCase):
 
     def test_bounded_wait_gives_up_after_repeated_reparking(self):
         """The waiter needs both hotspots and keeps meeting a holder: parked
-        on the cruise (user1), then on the highest contract (user3), then
-        on the cruise again (re-taken by user1). The third conflict exceeds
-        wait_limit=2 and the booking is abandoned with a defined outcome."""
+        on the cruise (user1), then — holding the cruise and its buffered
+        decrement — on the highest contract (user3). With wait_limit=2 the
+        next unit of waiting (a clock tick behind user3) spends the budget:
+        the booking is abandoned with a defined outcome and the BT releases
+        the cruise it was holding while it waited."""
         db = make_db(cruise_status="1", wait_limit=2)
         user1, user2, user3 = (db.session("user1"), db.session("user2"),
                                db.session("user3"))
@@ -662,24 +669,73 @@ class HoldQueueWaitTests(unittest.TestCase):
         user3.update("NCCONTRACT", top_isn, {})
 
         ticket = db.submit(
-            user2, lambda: nm.conew_refactored(user2, "10000002", "196"))
+            user2, lambda: nm.conew_hold_and_wait(user2, "10000002", "196"))
         self.assertEqual((ticket.waits, ticket.key), (1, ("NCCRUISE", isn)))
+        self.assertEqual(user2.holds, set())  # blocked at R1: nothing yet
 
         user1.backout()  # user2 resumes, takes the cruise, meets user3
         self.assertFalse(ticket.done)
         self.assertEqual((ticket.waits, ticket.key),
                          (2, ("NCCONTRACT", top_isn)))
-        self.assertEqual(user2.holds, set())  # released before re-parking
+        self.assertEqual(user2.holds, {("NCCRUISE", isn)})  # kept while parked
+        self.assertEqual(user2._pending_updates,
+                         {("NCCRUISE", isn): {"CRUISE-STATUS": "0"}})
+        with self.assertRaises(RecordHeldError) as held:
+            user1.get_held("NCCRUISE", isn)  # the waiter still owns it
+        self.assertIs(held.exception.holder, user2)
 
-        user1.get_held("NCCRUISE", isn)  # cruise taken again meanwhile
-        user3.backout()  # user2 resumes, meets user1: third conflict
+        self.assertEqual(db.tick(), [ticket])  # budget spent behind user3
 
         self.assertIsInstance(ticket.error, HoldTimeoutError)
-        self.assertEqual((ticket.waits, ticket.attempts), (2, 3))
+        self.assertEqual((ticket.error.key, ticket.error.holder),
+                         (("NCCONTRACT", top_isn), user3))
+        self.assertEqual((ticket.waits, ticket.attempts), (3, 2))
         self.assertEqual(nm.booking_outcome(ticket).msg_nr, 9902)
+        self.assertEqual(user2.holds, set())  # the timeout's BT released it
         self.assertEqual(cruise_status(db), "1")
         self.assertEqual(contracts_for(db, 196), [])
-        user1.backout()
+        self.assertEqual(db.hold_table, {("NCCONTRACT", top_isn): user3})
+        user3.backout()
+        self.assertEqual(db.hold_table, {})
+        self.assertEqual(db.waiting(), [])
+
+    def test_parked_waiter_keeps_its_open_transaction_and_resumes_it(self):
+        """Hold-and-wait, not BT + re-drive: user2 takes the cruise (R1),
+        buffers the decrement and blocks on the highest contract (R2) held
+        by user1. While parked its transaction is still the one it started
+        — no BT, cruise hold kept, a third session cannot take the cruise.
+        When user1 releases, the resumed run finishes *that* transaction:
+        one ET, no BT, one decrement, one contract."""
+        db = make_db(cruise_status="3")
+        user1, user2, user3 = (db.session("user1"), db.session("user2"),
+                               db.session("user3"))
+        isn = cruise_isn(db)
+        top_isn, _ = user1.read_descending("NCCONTRACT", "CONTRACT-ID",
+                                           limit=1)[0]
+        user1.update("NCCONTRACT", top_isn, {})  # holds R2 only
+        transaction = user2._transaction
+
+        ticket = db.submit(
+            user2, lambda: nm.conew_hold_and_wait(user2, "10000002", "196"))
+
+        self.assertEqual((ticket.done, ticket.key),
+                         (False, ("NCCONTRACT", top_isn)))
+        self.assertEqual(db.hold_table[("NCCRUISE", isn)], user2)
+        self.assertEqual(user2._pending_updates,
+                         {("NCCRUISE", isn): {"CRUISE-STATUS": "2"}})
+        self.assertEqual((user2._transaction, db.bt_count), (transaction, 0))
+        with self.assertRaises(RecordHeldError):
+            user3.get_held("NCCRUISE", isn)
+
+        user1.backout()  # releases R2: user2 resumes
+
+        self.assertEqual((ticket.done, ticket.error, ticket.attempts),
+                         (True, None, 2))
+        self.assertEqual(nm.booking_outcome(ticket).msg_nr, 9800)
+        self.assertEqual(ticket.result.new_contract_id, 500101)
+        self.assertEqual((db.et_count, db.bt_count), (1, 1))  # user1's BT only
+        self.assertEqual(cruise_status(db), "2")  # one decrement, not two
+        self.assertEqual(contract_ids(db), [500100, 500101])
         self.assertEqual(db.hold_table, {})
         self.assertEqual(db.waiting(), [])
 
@@ -693,7 +749,7 @@ class HoldQueueWaitTests(unittest.TestCase):
         isn = begin_booking(user1)  # user1 holds the cruise and walks away
 
         ticket = db.submit(
-            user2, lambda: nm.conew_refactored(user2, "10000002", "196"))
+            user2, lambda: nm.conew_hold_and_wait(user2, "10000002", "196"))
         self.assertEqual((ticket.done, ticket.waits), (False, 1))  # 1 of 3
 
         self.assertEqual(db.tick(), [])  # 2 of 3: still waiting
@@ -836,7 +892,7 @@ class HoldQueueWaitTests(unittest.TestCase):
         def booking(session):
             def run():
                 order.append(session.name)
-                return nm.conew_refactored(session, "10000002", "196")
+                return nm.conew_hold_and_wait(session, "10000002", "196")
             return run
 
         tickets = [db.submit(s, booking(s)) for s in waiters]
@@ -855,20 +911,24 @@ class HoldQueueWaitTests(unittest.TestCase):
 
     def test_interleaved_cruise_and_contract_holds_resolve(self):
         """user1 holds both hotspots (cruise 196 + highest contract). user2
-        (cruise 1484) parks on the contract record, user3 (cruise 196) on
-        the cruise record. user1's ET releases both; each waiter resumes,
-        no hold is left, and every CONTRACT-ID is unique."""
+        (cruise 1484) takes its own cruise and parks on the contract record
+        still holding it; user3 (cruise 196) parks on the cruise record.
+        Both bookings take R1 before R2, so the kept hold cannot close a
+        cycle. user1's ET releases both; each waiter resumes, no hold is
+        left, and every CONTRACT-ID is unique."""
         db = make_db(cruise_status="5")
         user2, user3 = db.session("user2"), db.session("user3")
         tickets = {}
 
         def others_arrive():
             tickets["u2"] = db.submit(
-                user2, lambda: nm.conew_refactored(user2, "10000002", "1484"))
+                user2, lambda: nm.conew_hold_and_wait(user2, "10000002", "1484"))
             tickets["u3"] = db.submit(
-                user3, lambda: nm.conew_refactored(user3, "10000002", "196"))
+                user3, lambda: nm.conew_hold_and_wait(user3, "10000002", "196"))
             self.assertEqual([t.key[0] for t in db.waiting()],
                              ["NCCONTRACT", "NCCRUISE"])
+            self.assertEqual(user2.holds, {("NCCRUISE", cruise_isn(db, 1484))})
+            self.assertEqual(user3.holds, set())
 
         user1 = db.session("user1")
         hooks = nm.Hooks(after_maxid_read=others_arrive)
@@ -936,7 +996,7 @@ class HoldQueueWaitTests(unittest.TestCase):
         begin_booking(user1)
         hooks = nm.Hooks(after_maxid_read=abend("NAT0954 abnormal termination"))
 
-        ticket = db.submit(user2, lambda: nm.conew_refactored(
+        ticket = db.submit(user2, lambda: nm.conew_hold_and_wait(
             user2, "10000002", "196", hooks=hooks))
         self.assertFalse(ticket.done)
 
