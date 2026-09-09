@@ -487,7 +487,10 @@ class AdabasSim:
 
         If the operation raises ``RecordHeldError`` it is parked on the
         contested record and re-driven when the holder ends its
-        transaction; the returned ``WaitTicket`` reports the outcome.
+        transaction; the returned ``WaitTicket`` reports the outcome. The
+        record is handed to one waiter at a time, the oldest: the others
+        stay queued (still ahead of any newcomer) until that waiter in turn
+        releases it.
         The parked session keeps whatever holds it already owns (as a real
         session waiting in the hold queue does), which is why a wait cycle
         is possible and is detected as ``DeadlockError``.
@@ -597,9 +600,17 @@ class AdabasSim:
         return False
 
     def _release(self, key):
-        waiters = self.hold_queue.pop(key, [])
-        for ticket in waiters:
+        """``key`` was released: hand it to the oldest waiter. The rest stay
+        queued, so a session that arrives while that waiter runs (even one
+        it submits itself) queues behind them; they get their turn from the
+        waiter's own ET/BT, or right away if it did not take ``key``."""
+        while key not in self.hold_table:
+            waiters = self.hold_queue.get(key)
+            if not waiters:
+                return
+            ticket = waiters.pop(0)
+            if not waiters:
+                del self.hold_queue[key]
             self._parked.pop(ticket.session, None)
             ticket.key = None
-        for ticket in waiters:
             self._drive(ticket)

@@ -928,6 +928,51 @@ class HoldQueueWaitTests(unittest.TestCase):
         self.assertEqual(db.hold_table, {})
         self.assertEqual(db.waiting(), [])
 
+    def test_newcomer_submitted_by_a_resumed_waiter_queues_behind_older_waiters(self):
+        """The released record is handed to the oldest waiter only; the
+        others stay queued. A booking submitted while that waiter runs (here
+        by the waiter itself, mid-flight) meets the waiter's hold and parks
+        *behind* them, so arrival order is kept: user2, user3, then user4."""
+        db = make_db(cruise_status="4")
+        user1 = db.session("user1")
+        begin_booking(user1)
+        user2, user3, user4 = (db.session(n) for n in ("user2", "user3", "user4"))
+        order, tickets = [], {}
+
+        def newcomer_arrives_while_user2_holds_the_cruise():
+            if "u4" not in tickets:
+                self.assertIn(("NCCRUISE", cruise_isn(db)), user2.holds)
+                tickets["u4"] = db.submit(user4, booking(user4))
+                self.assertFalse(tickets["u4"].done)  # parked behind user3
+                self.assertEqual([t.session.name for t in db.waiting()],
+                                 ["user3", "user4"])
+
+        def booking(session, hooks=None):
+            def run():
+                order.append(session.name)
+                return nm.conew_hold_and_wait(session, "10000002", "196",
+                                              hooks=hooks)
+            return run
+
+        tickets["u2"] = db.submit(user2, booking(user2, nm.Hooks(
+            after_maxid_read=newcomer_arrives_while_user2_holds_the_cruise)))
+        tickets["u3"] = db.submit(user3, booking(user3))
+        self.assertEqual(order, ["user2", "user3"])
+
+        commit_booking(user1)
+
+        # user4's first run is the one that parks; it completes after user3
+        self.assertEqual(order[2:], ["user2", "user4", "user3", "user4"])
+        self.assertEqual(
+            [nm.booking_outcome(tickets[k]).msg_nr for k in ("u2", "u3", "u4")],
+            [9800, 9800, 9800])
+        self.assertEqual(
+            [nm.booking_outcome(tickets[k]).new_contract_id
+             for k in ("u2", "u3", "u4")], [500102, 500103, 500104])
+        self.assertEqual(cruise_status(db), "0")
+        self.assertEqual(db.hold_table, {})
+        self.assertEqual(db.waiting(), [])
+
     def test_interleaved_cruise_and_contract_holds_resolve(self):
         """user1 holds both hotspots (cruise 196 + highest contract). user2
         (cruise 1484) takes its own cruise and parks on the contract record

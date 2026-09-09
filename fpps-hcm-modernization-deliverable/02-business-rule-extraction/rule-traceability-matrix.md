@@ -95,7 +95,7 @@ Every emitted code, the services that emit it, and the test modules whose lines 
 <!-- generated:code-test-coverage -->
 | Code | Emitting service(s) | Test modules referencing the code (line hits) | Behavioural model referencing the code |
 |---|---|---|---|
-| 9800 | `CONEW-N` | `tests/test_concurrency.py` (8), `tests/test_conew_booking.py` (3), `tests/test_disposition_analysis.py` (11), `tests/test_retry.py` (38), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (5) |
+| 9800 | `CONEW-N` | `tests/test_concurrency.py` (8), `tests/test_conew_booking.py` (3), `tests/test_disposition_analysis.py` (11), `tests/test_retry.py` (39), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (5) |
 | 9807 | `CRLIST-N` | `tests/test_crlist_listing.py` (2), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (3) |
 | 9857 | `CRLIST-N` | `tests/test_crlist_listing.py` (3), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (2) |
 | 9902 | `CONEW-N` | `tests/test_concurrency.py` (4), `tests/test_conew_booking.py` (11), `tests/test_disposition_analysis.py` (1), `tests/test_retry.py` (30), `tests/test_source_conformance.py` (7) | `tests/harness/natural_model.py` (10) |
