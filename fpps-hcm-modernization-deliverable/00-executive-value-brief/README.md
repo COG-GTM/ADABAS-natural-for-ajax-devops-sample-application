@@ -13,6 +13,7 @@ Executive brief (Markdown source, branded DOCX, and PDF) for systems-integrator 
 
 - [`executive-value-brief.md`](executive-value-brief.md) — content master, following the Cognition white-paper structure (challenge and approach, work streams, testing as the deliverable, audit trail, learning loop, roadmap and responsibilities)
 - [`Cognition-FPPS-HCM-Executive-Value-Brief.pdf`](Cognition-FPPS-HCM-Executive-Value-Brief.pdf) — branded PDF rendered from the DOCX; [`Cognition-FPPS-HCM-Executive-Value-Brief.docx`](Cognition-FPPS-HCM-Executive-Value-Brief.docx) — editable branded source
+- [`methodology-overview.html`](methodology-overview.html) — self-contained, Cognition × SMX × DOI-branded single-page walkthrough of the requirements-first methodology (five stages, evidence chain, session topology, `CONEW-N` concurrency sequence, disposition funnel, clean-vs-broken reconciliation, three-party value). Inline CSS/SVG with embedded logos; opens offline in any browser, no dependencies. Every count on the page comes from the generated artifacts in directories 01–10
 - [`diagrams/value-chain.mmd`](diagrams/value-chain.mmd) — Figure 1 source (Mermaid), exported to [`value-chain.png`](diagrams/value-chain.png) and [`value-chain.svg`](diagrams/value-chain.svg)
 - [`build.sh`](build.sh) — reproducible build: Mermaid → PNG/SVG, Markdown → branded DOCX via the Cognition collateral toolkit, DOCX → PDF via LibreOffice
 
