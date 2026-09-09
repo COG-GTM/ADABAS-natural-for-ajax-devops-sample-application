@@ -26,7 +26,8 @@ top of the same primitives:
 * ``Session.update_if`` — compare-and-swap guarded update (option 2);
 * ``Session.decrement_if_positive`` — atomic conditional decrement
   (option 5) and ``Session.next_id`` — platform-generated identifier
-  (option 4).
+  (option 4); once a file's identifier is platform-generated, ET refuses a
+  STORE that supplies its own value (``GeneratedKeyError``).
 """
 
 import copy
@@ -62,6 +63,22 @@ class DuplicateRequestError(Exception):
     def __init__(self, request_id):
         super().__init__(f"request {request_id!r} already committed")
         self.request_id = request_id
+
+
+class GeneratedKeyError(Exception):
+    """ET would store a record whose identifier is platform-generated
+    (``next_id`` is in use on that file) with a value this transaction did
+    not draw from the sequence, or one that already exists — the
+    ``GENERATED ALWAYS`` identity / unique-key violation of the target
+    platform. The transaction is backed out before this is raised."""
+
+    def __init__(self, file_name, field, value):
+        super().__init__(
+            f"{file_name}.{field}={value!r} was not issued to this transaction"
+            " or already exists")
+        self.file_name = file_name
+        self.field = field
+        self.value = value
 
 
 class RetryBudgetExhausted(Exception):
@@ -138,6 +155,7 @@ class AdabasFile:
         self.records = {}
         self._next_isn = 1
         self._sequence = None
+        self.generated_field = None
 
     def load(self, rows):
         for row in rows:
@@ -152,12 +170,20 @@ class AdabasFile:
     def next_id(self, field):
         """Platform-generated identifier: a sequence seeded from the current
         maximum of ``field``. Not transactional (a backout leaves a gap),
-        exactly like a database sequence."""
+        exactly like a database sequence. From the first draw on, ``field``
+        is the file's generated key: a STORE may only carry a value drawn
+        by the storing transaction (``Session.et`` enforces it), so a
+        writer that still computes MAX+1 cannot collide with the sequence.
+        """
         if self._sequence is None:
             self._sequence = max(
                 (rec[field] for rec in self.records.values()), default=0)
+            self.generated_field = field
         self._sequence += 1
         return self._sequence
+
+    def has_value(self, field, value):
+        return any(rec[field] == value for rec in self.records.values())
 
 
 class Session:
@@ -170,6 +196,7 @@ class Session:
         self._pending_updates = {}
         self._pending_stores = []
         self._pending_requests = []
+        self._issued_ids = set()  # (file, field, value) drawn via next_id
         self._transaction = 0  # bumped by every ET/BT
 
     # -- reads ---------------------------------------------------------
@@ -281,8 +308,26 @@ class Session:
         return current - 1
 
     def next_id(self, file_name, field):
-        """Platform-generated identifier for ``file_name`` (option 4)."""
-        return self.db.files[file_name].next_id(field)
+        """Platform-generated identifier for ``file_name`` (option 4). The
+        value belongs to this transaction: only it may STORE a record
+        carrying it, and only until its ET/BT."""
+        value = self.db.files[file_name].next_id(field)
+        self._issued_ids.add((file_name, field, value))
+        return value
+
+    def _check_generated_keys(self):
+        """The ``GENERATED ALWAYS`` rule for every buffered STORE into a file
+        whose identifier is platform-generated."""
+        unused = set(self._issued_ids)
+        for file_name, row in self._pending_stores:
+            f = self.db.files[file_name]
+            field = f.generated_field
+            if field is None:
+                continue
+            issued = (file_name, field, row.get(field))
+            if issued not in unused or f.has_value(field, row[field]):
+                raise GeneratedKeyError(*issued)
+            unused.discard(issued)
 
     def record_request(self, request_id, payload):
         """Claim ``request_id`` and buffer its ledger entry until ET.
@@ -350,9 +395,11 @@ class Session:
 
         A pending ledger entry whose id is already committed violates the
         ledger's uniqueness: the whole transaction is backed out and
-        ``DuplicateRequestError`` is raised, nothing is applied. Likewise a
-        ledger payload that fails to evaluate abends the ET: the transaction
-        is backed out (holds released, nothing applied) before the error
+        ``DuplicateRequestError`` is raised, nothing is applied. A STORE
+        that supplies its own value for a platform-generated identifier is
+        refused the same way (``GeneratedKeyError``). Likewise a ledger
+        payload that fails to evaluate abends the ET: the transaction is
+        backed out (holds released, nothing applied) before the error
         propagates.
         """
         for request_id, _ in self._pending_requests:
@@ -360,6 +407,7 @@ class Session:
                 self.backout()
                 raise DuplicateRequestError(request_id)
         try:
+            self._check_generated_keys()
             entries = [(request_id,
                         dict(payload() if callable(payload) else payload))
                        for request_id, payload in self._pending_requests]
@@ -385,6 +433,7 @@ class Session:
         self._pending_updates = {}
         self._pending_stores = []
         self._pending_requests = []
+        self._issued_ids = set()
         released = []
         for key in self.holds:
             if self.db.hold_table.get(key) is self:

@@ -15,7 +15,7 @@ A rule in `../02-business-rule-extraction/` has a class (validation edit, integr
 | Workflow | Sequence of calls reproducing the user path; state visible to the next step | Fixture; ordered calls | Later step sees the earlier step's effect | `tests/test_crlist_listing.py:71-77` |
 | Data model | Field names, formats, descriptors and counts parsed from the DDMs | `.NSD` files | Equality with the documented dictionary; regenerated docs identical | `tests/test_source_conformance.py:126-196` |
 
-The complete mapping of every existing test to the rule it protects is generated, not typed, in `regression-suite-map.md` (162 tests, 33 rules, 11 emitted message codes with 3 coverage gaps).
+The complete mapping of every existing test to the rule it protects is generated, not typed, in `regression-suite-map.md` (164 tests, 33 rules, 11 emitted message codes with 3 coverage gaps).
 
 ### Worked derivation: rule EDIT-9902
 
@@ -36,7 +36,7 @@ The complete mapping of every existing test to the rule it protects is generated
 flowchart LR
     SRC["Natural sources and DDMs<br/>SunnyIslands/Natural-Libraries/CRUISE16"] -->|"parsed by"| CONF["Source-conformance tests<br/>tests/test_source_conformance.py<br/>22 tests"]
     SRC -->|"modelled in"| MODEL["Behavioural model<br/>tests/harness/natural_model.py<br/>(validation harness, not a target)"]
-    MODEL --> BEH["Behavioural tests<br/>test_conew_booking · test_crlist_listing · test_concurrency · test_retry<br/>89 tests"]
+    MODEL --> BEH["Behavioural tests<br/>test_conew_booking · test_crlist_listing · test_concurrency · test_retry<br/>91 tests"]
     SRC -->|"analysed by"| DISP["Evidence drift tests<br/>tests/test_disposition_analysis.py<br/>47 tests"]
     CONF & BEH & DISP --> CI["regression-tests.yml<br/>compileall → unittest → dictionary drift gate"]
     BEH -->|"same model"| EQ["08 equivalence harness<br/>legacy expected batch"]
@@ -48,7 +48,7 @@ flowchart LR
 | Behavioural | The rule, as modelled, produces the documented outcome for each case, including interleaved sessions | That the model equals the compiled Natural object; a live Natural/ADABAS run is the only proof of that |
 | Evidence drift | Extraction evidence and generated documents are reproducible from source | Business correctness of the extraction |
 
-The counts (22 / 89 / 47, plus 4 package-integrity tests) come from `regression-suite-map.md`, which the generator's `--check` mode ties to `unittest` discovery.
+The counts (22 / 91 / 47, plus 4 package-integrity tests) come from `regression-suite-map.md`, which the generator's `--check` mode ties to `unittest` discovery.
 
 ## What CI actually runs
 
@@ -61,7 +61,7 @@ Both files under `.github/workflows/` were read for this section; the table stat
 | Triggers | `push` to `master`; `pull_request` targeting `master` |
 | Runner | `ubuntu-latest`, `actions/checkout@v4`, `actions/setup-python@v5` with Python 3.12 |
 | Step 1 | `python3 -m compileall -q tests tools` — byte-compiles every Python file under `tests/` and `tools/`; fails on syntax errors |
-| Step 2 | `python3 -m unittest discover -s tests -v` — runs all 162 tests (behavioural, source-conformance, evidence-drift, package-integrity) |
+| Step 2 | `python3 -m unittest discover -s tests -v` — runs all 164 tests (behavioural, source-conformance, evidence-drift, package-integrity) |
 | Step 3 | `python3 tools/generate_data_dictionary.py` then `git diff --exit-code docs/data-dictionary.md` — regenerates the data dictionary from the DDMs and fails if the committed copy differs |
 | Not present | No coverage measurement, no linting, no Natural compile, no ADABAS nucleus (the runner has neither), no execution of the deliverable's own `--check` generators |
 
@@ -82,7 +82,7 @@ Because the workflow triggers only on `master`, work on feature branches such as
 | Gate | Runs where | Blocks merge to `master` | Covers |
 |---|---|---|---|
 | Syntax check | CI step 1 | Yes | `tests/`, `tools/` |
-| Regression suite (162 tests) | CI step 2 | Yes | Rules in `regression-suite-map.md` |
+| Regression suite (164 tests) | CI step 2 | Yes | Rules in `regression-suite-map.md` |
 | Data-dictionary drift | CI step 3 | Yes | `docs/data-dictionary.md` ↔ DDMs |
 | Disposition evidence drift | Inside step 2 (`tests/test_disposition_analysis.py`) | Yes | `10-migration-disposition-dead-code/evidence/` |
 | Equivalence harness drift | `08/harness/reconcile.py --check` | Not wired into CI (local gate; candidate CI step) | `08/sample-output/`, `08/harness/fixtures/` |

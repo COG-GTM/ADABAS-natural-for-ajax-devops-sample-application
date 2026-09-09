@@ -165,7 +165,8 @@ RULES = [
      "CONTRACT-ID removes the MAX+1 hotspot and never goes negative "
      "(re-architecture options 4 + 5)",
      RETRY_DOC,
-     lambda ev: _has(ev, "conew_target_state", "decrement_if_positive")),
+     lambda ev: _has(ev, "conew_target_state", "decrement_if_positive",
+                     "generated_key")),
     ("RETRY-IDEMPOTENT", "integrity",
      "A re-drive after a committed booking replays the outcome: no double "
      "booking, no double decrement; the request ledger is unique even under "

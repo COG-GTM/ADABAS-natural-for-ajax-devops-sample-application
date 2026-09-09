@@ -192,16 +192,24 @@ and with it the single hottest record in the system (every booking on
 | Aspect | Mapping |
 |--------|---------|
 | R1 capacity | not addressed — combine with Option 1, 3 or 5 |
-| R2 MAX+1 | removed; uniqueness becomes a platform guarantee (REQ-I-002 "the MAX+1 idiom is not carried") |
+| R2 MAX+1 | removed; uniqueness becomes a platform guarantee (REQ-I-002 "the MAX+1 idiom is not carried"). The guarantee only holds if *nobody* else assigns the key: the target column is `GENERATED ALWAYS` (or the id-service is the sole issuer), so a writer that still computes MAX+1 during coexistence is refused at commit with a defined error instead of silently landing on the sequence's next value |
 | Pros | removes one of the two hotspots and the empty-file guard (BR-013) with it; identifiers stay unique under any interleaving; no message-code change |
 | Cons | ids are no longer dense/monotonic (a gap appears when an attempt backs out after drawing a value) — any downstream that *sorts by* or *reports gaps in* `CONTRACT-ID` must be checked; not expressible in the shipped ADABAS DDM without a platform feature or an id-service |
-| Failure modes | a consumer relying on MAX+1 density; sequence exhaustion (N8) |
+| Failure modes | a consumer relying on MAX+1 density; sequence exhaustion (N8); a MAX+1 writer left running beside the sequence (refused at ET, not merged: a sequence seeded from `MAX(CONTRACT-ID)` at cut-over and an application that keeps computing `MAX+1` would otherwise draw the same number) |
 | Message codes | unchanged; 9902 from the empty-file guard becomes unreachable (guard retired) |
 
 Harness: `Session.next_id` / `AdabasFile.next_id` (a monotonic counter that
-is *not* rolled back by BT, like a database sequence). Model:
-`conew_target_state` (`tests/harness/natural_model.py`). Tests:
-`tests/test_retry.py` `TargetStateTests.test_sequence_ids_remove_the_contract_hotspot`.
+is *not* rolled back by BT, like a database sequence). From its first use
+the field is the file's generated key: ET refuses a STORE whose value was
+not drawn by the storing transaction, or already exists
+(`GeneratedKeyError`, after BT). Model: `conew_target_state`
+(`tests/harness/natural_model.py`). Tests: `tests/test_retry.py`
+`TargetStateTests.test_sequence_ids_remove_the_contract_hotspot`,
+`test_legacy_maxid_writer_cannot_collide_with_the_sequence` (a
+`conew_refactored` booking that computes 500101 while a target booking
+holds 500101 from the sequence is refused and backed out; the target
+bookings commit 500101 and 500102),
+`test_generated_key_refuses_a_value_drawn_by_another_transaction`.
 
 ## Option 5 — Atomic conditional decrement
 
@@ -337,7 +345,7 @@ Target-state proofs added by this work, per requirement (all in
 | REQ-I-001 | retry succeeds when capacity remains after the competitor's ET | `test_retry_succeeds_when_capacity_remains_after_commit`, `test_waiter_succeeds_when_capacity_remains`, `test_stale_guard_retries_and_succeeds_when_capacity_remains` |
 | REQ-I-001 | budget/wait exhausted → defined code, no partial booking | `test_budget_exhausted_under_sustained_contention_is_defined`, `test_bounded_wait_gives_up_after_repeated_reparking`, `test_retry_cap_under_sustained_contention_returns_9902`, `test_bounded_redrive_of_target_state_is_defined_on_exhaustion` |
 | REQ-I-001 | conditional decrement never goes negative | `test_atomic_decrement_never_goes_negative`, `test_capacity_contention_resolves_via_lock_wait` |
-| REQ-I-002 | no duplicate CONTRACT-ID under hold or retry | `test_maxid_contention_never_duplicates_contract_ids`, `test_interleaved_cruise_and_contract_holds_resolve`, `test_sequence_ids_remove_the_contract_hotspot` |
+| REQ-I-002 | no duplicate CONTRACT-ID under hold or retry; a MAX+1 writer beside the sequence is refused, not merged | `test_maxid_contention_never_duplicates_contract_ids`, `test_interleaved_cruise_and_contract_holds_resolve`, `test_sequence_ids_remove_the_contract_hotspot`, `test_legacy_maxid_writer_cannot_collide_with_the_sequence`, `test_generated_key_refuses_a_value_drawn_by_another_transaction` |
 | BR-011 / REQ-I-003 | backout leaves no hold, no decrement; abend mid-retry backs out | `test_backout_on_retry_leaves_no_dangling_state`, `test_abend_mid_retry_backs_out_cleanly`, `test_customer_not_found_during_retry_still_backs_out` |
 | BR-011 | idempotent re-drive after a committed ET; concurrent same-id submits book once; the ledger entry is complete in the committing ET and bound to the request's inputs | `test_completed_attempt_is_never_redriven`, `test_redrive_with_same_request_id_replays_committed_outcome`, `test_failed_request_is_not_recorded_and_can_be_redriven`, `test_concurrent_same_request_id_books_once_and_replays`, `test_same_request_id_retry_finds_the_replay`, `test_waiter_resumed_by_ledger_release_sees_complete_outcome`, `test_reused_request_id_with_different_inputs_is_rejected`, `test_commit_between_lookup_and_claim_is_replayed_not_rebooked`, `test_duplicate_at_et_is_backed_out_and_replayed`, `test_ledger_uniqueness_is_enforced_at_et` |
 | BR-011 / REQ-I-003 | an abend after the decrement or after the identifier backs out in every variant; a waiter's abend stays with the waiter | `test_abend_after_swap_backs_out`, `test_abend_after_decrement_backs_out`, `test_resumed_waiter_abend_stays_with_the_waiter` |
@@ -396,7 +404,10 @@ Target-state proofs added by this work, per requirement (all in
   own pending update of the field, as a relational `UPDATE ... WHERE`
   does, so two decrements in one transaction take two places —,
   `Session.next_id` (sequence not rolled
-  back by BT), `record_request` / `completed_request` (idempotency ledger:
+  back by BT; from its first draw the field is `GENERATED ALWAYS` — a
+  STORE carrying a value the storing transaction did not draw, or one
+  that already exists, is refused at ET with `GeneratedKeyError` after a
+  BT, so a MAX+1 writer cannot land on the sequence's next value), `record_request` / `completed_request` (idempotency ledger:
   the id is claimed under a hold and the ledger is read *under that hold*
   — lookup and claim are one step, so a commit landing just before the
   claim is returned to the claimant instead of being booked twice; the

@@ -24,6 +24,7 @@ from tests.harness.adabas_sim import (
     REQUEST_LEDGER,
     DeadlockError,
     DuplicateRequestError,
+    GeneratedKeyError,
     HoldTimeoutError,
     RecordHeldError,
     RetryBudgetExhausted,
@@ -1210,6 +1211,66 @@ class TargetStateTests(unittest.TestCase):
         self.assertEqual((first.new_contract_id, results[0].new_contract_id),
                          (500101, 500102))
         self.assertEqual(len(contract_ids(db)), len(set(contract_ids(db))))
+
+    def test_legacy_maxid_writer_cannot_collide_with_the_sequence(self):
+        """Mixed writers. Target booking A draws 500101 from the sequence;
+        before A commits, a MAX+1 booking (``conew_refactored``, cruise
+        1484) computes 500101 as well and reaches its ET first; target
+        booking B follows. The identifier is GENERATED ALWAYS once the
+        platform issues it: the MAX+1 STORE is refused at ET and that
+        transaction is backed out (its decrement included), A commits
+        500101, B draws 500102. One id per contract, no lost place."""
+        db = make_db(cruise_status="5")
+        a, legacy, b = (db.session("a"), db.session("legacy"),
+                        db.session("b"))
+        refused = []
+
+        def legacy_books_meanwhile():
+            with self.assertRaises(GeneratedKeyError) as ctx:
+                nm.conew_refactored(legacy, "10000002", "1484")
+            refused.append(ctx.exception)
+            self.assertEqual(legacy.holds, set())  # ET backed it out
+            self.assertFalse(legacy.in_transaction())
+
+        hooks = nm.Hooks(after_maxid_read=legacy_books_meanwhile)
+        first = nm.conew_target_state(a, "10000001", "196", hooks=hooks)
+        second = nm.conew_target_state(b, "10000002", "196")
+
+        self.assertEqual((refused[0].file_name, refused[0].field,
+                          refused[0].value), ("NCCONTRACT", "CONTRACT-ID", 500101))
+        self.assertEqual((first.msg_nr, second.msg_nr), (9800, 9800))
+        self.assertEqual((first.new_contract_id, second.new_contract_id),
+                         (500101, 500102))
+        self.assertEqual(contract_ids(db), [500100, 500101, 500102])
+        self.assertEqual(cruise_status(db, 1484), "3")  # legacy's decrement undone
+        self.assertEqual(cruise_status(db), "3")
+        self.assertEqual(db.hold_table, {})
+
+    def test_generated_key_refuses_a_value_drawn_by_another_transaction(self):
+        """A value the sequence issued to one transaction cannot be stored
+        by another (or twice by its owner): ET refuses it and backs out."""
+        db = make_db()
+        owner, other = db.session("owner"), db.session("other")
+        row = {"PRICE": 0.0, "DATE-BOOKING": 20260820,
+               "ID-CRUISE": 196, "ID-CUSTOMER": 10000001}
+        new_id = owner.next_id("NCCONTRACT", "CONTRACT-ID")
+
+        other.store("NCCONTRACT", dict(row, **{"CONTRACT-ID": new_id}))
+        with self.assertRaises(GeneratedKeyError):
+            other.et()
+        self.assertEqual(contract_ids(db), [500100])
+
+        owner.store("NCCONTRACT", dict(row, **{"CONTRACT-ID": new_id}))
+        owner.store("NCCONTRACT", dict(row, **{"CONTRACT-ID": new_id}))
+        with self.assertRaises(GeneratedKeyError):
+            owner.et()
+        self.assertEqual(contract_ids(db), [500100])
+
+        owner.store("NCCONTRACT", dict(row, **{"CONTRACT-ID": new_id}))
+        with self.assertRaises(GeneratedKeyError):
+            owner.et()  # the BT above ended the transaction the id belonged to
+        self.assertEqual(contract_ids(db), [500100])
+        self.assertEqual(db.hold_table, {})
 
     def test_capacity_contention_resolves_via_lock_wait(self):
         """The one remaining hotspot (the cruise row) is resolved by the
