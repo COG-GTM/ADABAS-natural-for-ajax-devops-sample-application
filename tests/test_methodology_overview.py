@@ -14,6 +14,7 @@ The page is also required to be genuinely self-contained: no stylesheet,
 script, font, or image may be fetched from the network.
 """
 
+import hashlib
 import json
 import re
 import unittest
@@ -23,6 +24,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = REPO_ROOT / "fpps-hcm-modernization-deliverable"
 PAGE = PACKAGE / "00-executive-value-brief" / "methodology-overview.html"
+PAGE_PDF = PAGE.with_suffix(".pdf")
+PAGE_PDF_SOURCE_HASH = PAGE_PDF.with_name(PAGE_PDF.name + ".source.sha256")
 RULES_MD = PACKAGE / "02-business-rule-extraction" / "business-rules.md"
 REQS_MD = PACKAGE / "05-requirements-baseline" / "requirements-baseline.md"
 ACS_MD = PACKAGE / "05-requirements-baseline" / "acceptance-criteria.md"
@@ -193,6 +196,18 @@ class MethodologyOverviewPage(unittest.TestCase):
 
     def test_page_has_no_unresolved_placeholders(self):
         self.assertNotIn("{{", self.text)
+
+    def test_pdf_was_rendered_from_the_committed_page(self):
+        self.assertTrue(PAGE_PDF.is_file(), f"missing {PAGE_PDF.name}")
+        self.assertEqual(PAGE_PDF.read_bytes()[:5], b"%PDF-")
+        rendered_from = PAGE_PDF_SOURCE_HASH.read_text(encoding="utf-8").strip()
+        current = hashlib.sha256(PAGE.read_bytes()).hexdigest()
+        self.assertEqual(
+            rendered_from,
+            current,
+            "methodology-overview.pdf is stale: re-run "
+            "00-executive-value-brief/render-methodology-pdf.mjs after editing the HTML",
+        )
 
 
 if __name__ == "__main__":

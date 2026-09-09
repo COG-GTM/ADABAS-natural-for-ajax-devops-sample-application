@@ -236,8 +236,8 @@ RULES = [
      lambda ev: _file(ev, "test_deliverable_generators.py")),
     ("PKG-OVERVIEW-PAGE", "package integrity",
      "Every count quoted on the customer-facing methodology page equals the "
-     "generated artifact that owns it, and the page fetches nothing from "
-     "the network",
+     "generated artifact that owns it, the page fetches nothing from the "
+     "network, and its PDF rendition was produced from the committed page",
      "fpps-hcm-modernization-deliverable/00-executive-value-brief/"
      "methodology-overview.html",
      lambda ev: _file(ev, "test_methodology_overview.py")),

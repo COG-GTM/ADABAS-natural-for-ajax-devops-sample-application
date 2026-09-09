@@ -14,6 +14,7 @@ Executive brief (Markdown source, branded DOCX, and PDF) for systems-integrator 
 - [`executive-value-brief.md`](executive-value-brief.md) — content master, following the Cognition white-paper structure (challenge and approach, work streams, testing as the deliverable, audit trail, learning loop, roadmap and responsibilities)
 - [`Cognition-FPPS-HCM-Executive-Value-Brief.pdf`](Cognition-FPPS-HCM-Executive-Value-Brief.pdf) — branded PDF rendered from the DOCX; [`Cognition-FPPS-HCM-Executive-Value-Brief.docx`](Cognition-FPPS-HCM-Executive-Value-Brief.docx) — editable branded source
 - [`methodology-overview.html`](methodology-overview.html) — self-contained, Cognition × SMX × DOI-branded single-page walkthrough of the requirements-first methodology (five stages, evidence chain, session topology, `CONEW-N` concurrency sequence, disposition funnel, clean-vs-broken reconciliation, three-party value). Inline CSS/SVG with embedded logos and embedded Inter / Inter Tight / JetBrains Mono fonts; opens offline in any browser and fetches nothing from the network. Every count on the page carries a `data-metric` hook and `tests/test_methodology_overview.py` fails if it diverges from the generated artifact in directories 01–10 that owns it (or if the page gains a metric the test does not know)
+- [`methodology-overview.pdf`](methodology-overview.pdf) — the same page as a customer-sendable landscape PDF (11 pages, one section per page, footer with page numbers), rendered by [`render-methodology-pdf.mjs`](render-methodology-pdf.mjs). The renderer also writes `methodology-overview.pdf.source.sha256` — the hash of the HTML it was rendered from — and the same test fails if the committed PDF was not rendered from the committed page
 - [`diagrams/value-chain.mmd`](diagrams/value-chain.mmd) — Figure 1 source (Mermaid), exported to [`value-chain.png`](diagrams/value-chain.png) and [`value-chain.svg`](diagrams/value-chain.svg)
 - [`build.sh`](build.sh) — reproducible build: Mermaid → PNG/SVG, Markdown → branded DOCX via the Cognition collateral toolkit, DOCX → PDF via LibreOffice
 
@@ -24,6 +25,11 @@ Executive brief (Markdown source, branded DOCX, and PDF) for systems-integrator 
 # that provides scripts/build_cognition_docx.py and templates/_TEMPLATE - COPY THIS.docx
 RFP_REPO=/path/to/federal_RFP_responses ./build.sh
 pdftoppm -r 110 -png Cognition-FPPS-HCM-Executive-Value-Brief.pdf /tmp/brief-page   # then inspect every page
+
+# Methodology page → PDF. Run from any directory where `npm i playwright` was done;
+# pass the Chrome/Chromium binary (or set CHROME_BIN).
+node /path/to/00-executive-value-brief/render-methodology-pdf.mjs /usr/bin/google-chrome
+pdftoppm -r 110 -png methodology-overview.pdf /tmp/methodology-page   # then inspect every page
 ```
 
 ## How an SI consumes this
