@@ -36,7 +36,8 @@ missing, 9918 customer number not found.
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 
-from .adabas_sim import RecordHeldError, RetryBudgetExhausted, retry_on_hold
+from .adabas_sim import (DuplicateRequestError, RecordHeldError,
+                         RetryBudgetExhausted, retry_on_hold)
 
 MSG_OK = 9800
 MSG_NOT_AVAILABLE = 9902
@@ -340,11 +341,15 @@ def conew_with_retry(session, customer_in, cruise_in, booking_date=20260820,
     Any other exception is the ON ERROR path: BACKOUT TRANSACTION, then the
     abend propagates (no retry of an abend).
 
-    ``request_id`` is an idempotency key. Every attempt first looks the id
-    up in the committed ledger (replaying the stored outcome if present),
-    then claims it under a hold so a concurrent transaction for the same id
-    is a hold conflict that retries — and finds the replay — rather than a
-    second booking. The ledger entry is bound to the request's inputs
+    ``request_id`` is an idempotency key. Every attempt claims the id under
+    a hold and reads the committed ledger under that same hold (one atomic
+    step — a commit that lands between a separate lookup and the claim is
+    still seen), replaying the stored outcome if present; a concurrent
+    transaction for the same id is a hold conflict that retries — and finds
+    the replay — rather than a second booking. Should a duplicate still
+    reach ET (a claim path that bypassed the hold), the ET is refused and
+    backed out and the committed outcome is replayed instead of surfacing
+    ``DuplicateRequestError``. The ledger entry is bound to the request's inputs
     (``RequestMismatchError`` when the same id arrives with different
     inputs) and is written by the booking's own ET, describing the contract
     that ET stores.
@@ -370,15 +375,20 @@ def conew_with_retry(session, customer_in, cruise_in, booking_date=20260820,
 
     def attempt_once(attempt):
         if request_id is not None:
-            done = session.completed_request(request_id)
+            # may raise RecordHeldError: another transaction holds the claim
+            done = session.record_request(request_id, committed_outcome)
             if done is not None:
+                session.backout()  # release the claim; nothing was buffered
                 return replay(done, attempt)
-            session.record_request(request_id, committed_outcome)  # may raise RecordHeldError
         try:
             res = conew_refactored(session, customer_in, cruise_in,
                                    booking_date, hooks)
         except RecordHeldError:
             raise  # conew_refactored has already backed out
+        except DuplicateRequestError:
+            # ET refused and backed out: the id was committed by someone
+            # else after all, so the committed outcome is the answer
+            return replay(session.completed_request(request_id), attempt)
         except Exception:
             session.backout()  # ON ERROR: the abend is not retried
             raise

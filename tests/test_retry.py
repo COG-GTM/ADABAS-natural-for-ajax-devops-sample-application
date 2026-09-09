@@ -332,6 +332,61 @@ class BoundedRetryTests(unittest.TestCase):
         self.assertEqual(cruise_status(db), "4")
         self.assertEqual(len(contracts_for(db, 196)), 1)
 
+    def test_commit_between_lookup_and_claim_is_replayed_not_rebooked(self):
+        """Lookup and claim are one step: the ledger is read *under* the
+        claim hold. A twin that claims, books and commits the same id in
+        the instant before user2 acquires the hold is therefore seen by
+        user2's claim, which replays instead of booking a second contract
+        and tripping DuplicateRequestError at ET."""
+        db = make_db(cruise_status="5")
+        user1, user2 = db.session("user1"), db.session("user2")
+        first = {}
+        real_hold = user2.hold
+
+        def hold_with_twin_committing_first(file_name, isn):
+            if file_name == REQUEST_LEDGER and not first:
+                first["result"] = nm.conew_with_retry(
+                    user1, "10000001", "196", request_id="req-21")
+            return real_hold(file_name, isn)
+
+        user2.hold = hold_with_twin_committing_first
+        second = nm.conew_with_retry(user2, "10000001", "196", attempts=1,
+                                     request_id="req-21")
+
+        self.assertEqual((first["result"].msg_nr, first["result"].replayed),
+                         (9800, False))
+        self.assertEqual((second.msg_nr, second.replayed, second.attempts),
+                         (9800, True, 1))
+        self.assertEqual(second.new_contract_id, first["result"].new_contract_id)
+        self.assertEqual(cruise_status(db), "4")
+        self.assertEqual(len(contracts_for(db, 196)), 1)
+        self.assertEqual((db.et_count, db.hold_table, user2.holds), (1, {}, set()))
+
+    def test_duplicate_at_et_is_backed_out_and_replayed(self):
+        """Belt and braces for a claim path that bypassed the hold: when the
+        id turns out to be committed at ET, the booking is refused and
+        backed out (no decrement, no contract) and the caller receives the
+        committed outcome as a replay, not DuplicateRequestError."""
+        db = make_db(cruise_status="5")
+        user2 = db.session("user2")
+        foreign = {"msg_nr": 9800, "new_contract_id": 424242,
+                   "fingerprint": ("10000001", "196", 20260820)}
+
+        def foreign_writer_commits_same_id():
+            db.request_ledger["req-23"] = dict(foreign)  # bypasses the claim
+
+        hooks = nm.Hooks(after_maxid_read=foreign_writer_commits_same_id)
+        res = nm.conew_with_retry(user2, "10000001", "196", hooks=hooks,
+                                  attempts=1, request_id="req-23")
+
+        self.assertEqual((res.msg_nr, res.replayed, res.new_contract_id),
+                         (9800, True, 424242))
+        self.assertEqual(cruise_status(db), "5")  # user2's decrement backed out
+        self.assertNotIn(424242, contract_ids(db))
+        self.assertEqual(len(contracts_for(db, 196)), 0)
+        self.assertEqual((db.et_count, db.bt_count), (0, 1))
+        self.assertEqual((db.hold_table, user2.holds), ({}, set()))
+
     def test_waiter_resumed_by_ledger_release_sees_complete_outcome(self):
         """The ledger entry is written by the same ET that stores the
         contract, fully formed: a session parked on the ledger claim is
@@ -577,6 +632,48 @@ class HoldQueueWaitTests(unittest.TestCase):
         commit_booking(user1)
         self.assertEqual((cruise_status(db), db.hold_table), ("0", {}))
         self.assertEqual(db.tick(), [])  # nothing left to expire
+
+    def test_simultaneous_timeouts_do_not_resume_each_other(self):
+        """Two waiters expire in the same tick and the first one's backout
+        releases the record the second is parked on. Both must time out
+        (the second is not re-driven by a release that only happened
+        because its neighbour gave up), be dequeued and backed out, and the
+        never-releasing holder is untouched."""
+        db = make_db(cruise_status="5", wait_limit=2)
+        holder, user2, user3 = (db.session(n) for n in ("holder", "user2", "user3"))
+        isn = begin_booking(holder)  # holds the cruise and walks away
+        top_isn, _ = db.session("probe").read_descending(
+            "NCCONTRACT", "CONTRACT-ID", limit=1)[0]
+
+        def user2_op():
+            user2.update("NCCONTRACT", top_isn, {})  # holds the top contract
+            user2.get_held("NCCRUISE", isn)            # parks behind holder
+            user2.et()
+
+        def user3_op():
+            user3.update("NCCONTRACT", top_isn, {})  # parks behind user2
+            user3.et()
+
+        t2 = db.submit(user2, user2_op)
+        t3 = db.submit(user3, user3_op)
+        self.assertEqual(db.waiting(), [t2, t3])
+        self.assertEqual((t2.key, t3.key),
+                         (("NCCRUISE", isn), ("NCCONTRACT", top_isn)))
+
+        self.assertEqual(db.tick(), [t2, t3])
+
+        self.assertIsInstance(t2.error, HoldTimeoutError)
+        self.assertIsInstance(t3.error, HoldTimeoutError)
+        self.assertEqual((t2.error.key, t2.error.holder), (("NCCRUISE", isn), holder))
+        self.assertEqual((t3.error.key, t3.error.holder), (("NCCONTRACT", top_isn), user2))
+        self.assertEqual((t2.attempts, t3.attempts), (1, 1))  # user3 was not re-driven
+        self.assertEqual((db.waiting(), db.hold_queue, db._parked), ([], {}, {}))
+        self.assertEqual((user2.holds, user3.holds), (set(), set()))
+        self.assertEqual(db.hold_table, {("NCCRUISE", isn): holder})
+        self.assertEqual(db.et_count, 0)
+
+        commit_booking(holder)
+        self.assertEqual((cruise_status(db), db.hold_table), ("4", {}))
 
     def test_fifo_hold_queue_is_fair_and_starvation_free(self):
         """Three waiters on the last two places resume in arrival order:

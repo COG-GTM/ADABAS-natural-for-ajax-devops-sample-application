@@ -265,13 +265,21 @@ class Session:
 
         The claim is a hold on the ledger row, so a concurrent transaction
         for the same request meets ``RecordHeldError`` (and re-checks the
-        ledger on its next attempt) instead of booking a second time.
+        ledger on its next attempt) instead of booking a second time. The
+        ledger is read *under* the hold: if the id was committed in the
+        meantime the committed entry (a copy) is returned and nothing is
+        buffered, so lookup and claim are one atomic step; otherwise the
+        claim is buffered and None is returned.
         ``payload`` is a dict, or a zero-argument callable evaluated at ET
         time (so the entry can describe the outcome the same ET commits).
         Either way the ledger stores its own copy.
         """
         self.hold(REQUEST_LEDGER, request_id)
+        done = self.completed_request(request_id)
+        if done is not None:
+            return done
         self._pending_requests.append((request_id, payload))
+        return None
 
     def completed_request(self, request_id):
         """A copy of the committed outcome of ``request_id``, or None."""
@@ -388,12 +396,17 @@ class AdabasSim:
             ticket.waits += units
             if ticket.waits >= self.wait_limit:
                 expired.append(ticket)
+        # Dequeue every expired ticket before abandoning any: a backout
+        # releases holds and would otherwise re-drive a ticket that is
+        # itself about to time out (same order of events as _release).
+        errors = []
         for ticket in expired:
             self._dequeue(ticket)
-            holder = self.hold_table.get(ticket.key)
-            key = ticket.key
-            ticket.key = None
-            self._abandon(ticket, HoldTimeoutError(key, holder, ticket.session))
+            key, ticket.key = ticket.key, None
+            errors.append(HoldTimeoutError(key, self.hold_table.get(key),
+                                           ticket.session))
+        for ticket, error in zip(expired, errors):
+            self._abandon(ticket, error)
         return expired
 
     def _dequeue(self, ticket):
