@@ -59,6 +59,7 @@ CRGET = "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CRGET-N.NSN"
 CAMSG = "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CAMSG-N.NSN"
 CUNEW = "SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CUNEW-N.NSN"
 DDMS = "SunnyIslands/Natural-Libraries/CRUISE16/DDMs/"
+RETRY_DOC = "docs/retry-rearchitecture.md"
 
 
 def _has(ev, *needles):
@@ -136,6 +137,42 @@ RULES = [
      f"{CONEW}:88-92",
      lambda ev: _has(ev, "decrements_by_one", "last_available_slot",
                      "invisible_after_last_slot")),
+    # --- integrity (retry re-architecture, target-state models) ----------
+    ("RETRY-BOUNDED", "integrity",
+     "A bounded BT + re-drive loop ends in a defined message code when the "
+     "budget is spent, with no hold, decrement or contract left behind "
+     "(re-architecture option 3)",
+     RETRY_DOC,
+     lambda ev: _file(ev, "test_retry.py")
+     and _has(ev, "conew_with_retry", "retry_on_hold", "bounded_redrive")),
+    ("RETRY-WAIT-RESUME", "integrity",
+     "A session parked in the hold queue resumes FIFO at the holder's "
+     "ET/BT, is abandoned with a defined code after the wait limit, and a "
+     "wait-for cycle is detected instead of blocking forever "
+     "(re-architecture option 1)",
+     RETRY_DOC,
+     lambda ev: _file(ev, "test_retry.py")
+     and _has(ev, "nm.booking_outcome", "holdqueuewait", "hold queue",
+              "hold-queue", "lock_wait")),
+    ("RETRY-CAS-GUARD", "integrity",
+     "A conditional decrement guarded by the unheld read value cannot lose "
+     "an update; a stale guard re-reads and retries up to a cap "
+     "(re-architecture option 2)",
+     RETRY_DOC,
+     lambda ev: _has(ev, "conew_optimistic")),
+    ("RETRY-TARGET-ATOMIC", "integrity",
+     "Target state: atomic conditional decrement plus platform-generated "
+     "CONTRACT-ID removes the MAX+1 hotspot and never goes negative "
+     "(re-architecture options 4 + 5)",
+     RETRY_DOC,
+     lambda ev: _has(ev, "conew_target_state", "decrement_if_positive",
+                     "generated_key")),
+    ("RETRY-IDEMPOTENT", "integrity",
+     "A re-drive after a committed booking replays the outcome: no double "
+     "booking, no double decrement; the request ledger is unique even under "
+     "concurrent same-id submits",
+     RETRY_DOC,
+     lambda ev: _has(ev, "request_id", "never_redriven", "ledger")),
     # --- derivations -----------------------------------------------------
     ("DER-PRICE-1W", "derivation",
      "Contract PRICE is the one-week price (PRICE-1W)",
@@ -257,6 +294,8 @@ FILE_CLASS = {
                               "tests/harness/natural_model.py"),
     "test_concurrency.py": ("Behavioural (interleaved sessions)",
                             "tests/harness/natural_model.py + adabas_sim.py"),
+    "test_retry.py": ("Behavioural (retry and hold-queue interleavings)",
+                      "tests/harness/natural_model.py + adabas_sim.py"),
     "test_crlist_listing.py": ("Behavioural (listing and pricing)",
                                "tests/harness/natural_model.py"),
     "test_source_conformance.py": ("Source conformance",

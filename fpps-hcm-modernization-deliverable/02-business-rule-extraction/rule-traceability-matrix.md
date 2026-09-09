@@ -6,6 +6,8 @@ Maturity: rows whose test column names a file in `tests/` are Demonstrated (the 
 
 Column key: S = static citation, C = conformance test, H = harness execution, D = repository documentation.
 
+Tests in `tests/test_retry.py` run the *target-state* models (`tests/harness/natural_model.py`: bounded BT + re-drive, optimistic guard, atomic conditional decrement, platform-generated identifiers) described in `docs/retry-rearchitecture.md`; they prove the outcome a rule requires under contention, not the shipped Natural idiom, which `tests/test_source_conformance.py` continues to pin.
+
 ## Active rules
 
 | Rule | Source lines | Code(s) | Existing test | Requirement(s) | Disposition |
@@ -15,12 +17,12 @@ Column key: S = static citation, C = conformance test, H = harness execution, D 
 | BR-003 Edits fire one at a time, customer first | `SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:54-59` | 9904 then 9905 | `tests/test_conew_booking.py:84-90` | REQ-F-003 | redesign |
 | BR-004 Offering identifier numeric N8 | `SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:60-65` | 9905 | `tests/test_conew_booking.py:92-98` | REQ-F-003, REQ-X-002 | replace-with-standard-HCM |
 | BR-005 Customer identifier numeric, fall-through | `SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:66-71` | 9904 set, 9918 returned | `tests/test_conew_booking.py:100-108` | REQ-F-003, REQ-X-002 | redesign |
-| BR-006 Test-and-set on held offering record | `SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:79-92`, `SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:133-138` | 9902 | `tests/test_concurrency.py:24-45` (defect), `tests/test_concurrency.py:68-97` (fix); `tests/test_source_conformance.py:35-43` | REQ-I-001, REQ-N-002 | carry |
-| BR-007 MAX+1 booking identifier under hold | `SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:95-102` | none | `tests/test_concurrency.py:46-66` (defect), `tests/test_concurrency.py:99-127` (fix); `tests/test_source_conformance.py:45-53` | REQ-I-002, REQ-D-002, REQ-N-002 | replace-with-standard-HCM (carry uniqueness) |
+| BR-006 Test-and-set on held offering record | `SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:79-92`, `SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:133-138` | 9902 | `tests/test_concurrency.py:24-45` (defect), `tests/test_concurrency.py:68-97` (fix); `tests/test_source_conformance.py:35-43`; retry/target-state: `tests/test_retry.py:86-102`, `tests/test_retry.py:295-316`, `tests/test_retry.py:582-590` | REQ-I-001, REQ-N-002 | carry |
+| BR-007 MAX+1 booking identifier under hold | `SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:95-102` | none | `tests/test_concurrency.py:46-66` (defect), `tests/test_concurrency.py:99-127` (fix); `tests/test_source_conformance.py:45-53`; retry/target-state: `tests/test_retry.py:156-172`, `tests/test_retry.py:416-445`, `tests/test_retry.py:592-608` | REQ-I-002, REQ-D-002, REQ-N-002 | replace-with-standard-HCM (carry uniqueness) |
 | BR-008 Price is the one-week price | `SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:103` | none | `tests/test_conew_booking.py:42-50` | REQ-F-003, REQ-D-002 | SME-required |
 | BR-009 Booking date is system date | `SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:105-106` | none | harness needed (date is a parameter in `tests/harness/natural_model.py:172-173`) | REQ-D-002 | replace-with-standard-HCM |
-| BR-010 Customer must exist; backout otherwise | `SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:112-123`, `SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:151-162` | 9918 | `tests/test_conew_booking.py:165-175`, `tests/test_conew_booking.py:132-140` | REQ-I-007, REQ-F-003 | replace-with-standard-HCM (carry rollback) |
-| BR-011 Booking is all-or-nothing | `SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:114-123` | 9800 → 0 | `tests/test_conew_booking.py:200-210`; `tests/test_source_conformance.py:55-61` | REQ-I-003 | carry |
+| BR-010 Customer must exist; backout otherwise | `SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:112-123`, `SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:151-162` | 9918 | `tests/test_conew_booking.py:165-175`, `tests/test_conew_booking.py:132-140`; under retry: `tests/test_retry.py:275-289` | REQ-I-007, REQ-F-003 | replace-with-standard-HCM (carry rollback) |
+| BR-011 Booking is all-or-nothing | `SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:114-123` | 9800 → 0 | `tests/test_conew_booking.py:200-210`; `tests/test_source_conformance.py:55-61`; across retries: `tests/test_retry.py:174-200`, `tests/test_retry.py:202-228`, `tests/test_retry.py:230-257` | REQ-I-003 | carry |
 | BR-012 Outcome as code + typed text | `SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:143-146` | all | `tests/test_conew_booking.py:18-25`; `tests/test_source_conformance.py:120-123` | REQ-X-001, REQ-F-007 | replace-with-standard-HCM |
 | BR-013 Empty booking file guard | `SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CONEW-N.NSN:126-131` | 9902 | `tests/test_conew_booking.py:185-198`; `tests/test_source_conformance.py:75-84` | REQ-I-003 | retire |
 | BR-014 Only offerings with free places listed | `SunnyIslands/Natural-Libraries/CRUISE16/Subprograms/CRLIST-N.NSN:51-57` | none | `tests/test_crlist_listing.py:10-15`, `tests/test_crlist_listing.py:71-77` | REQ-F-001 | replace-with-standard-HCM |
@@ -93,17 +95,17 @@ Every emitted code, the services that emit it, and the test modules whose lines 
 <!-- generated:code-test-coverage -->
 | Code | Emitting service(s) | Test modules referencing the code (line hits) | Behavioural model referencing the code |
 |---|---|---|---|
-| 9800 | `CONEW-N` | `tests/test_concurrency.py` (8), `tests/test_conew_booking.py` (3), `tests/test_disposition_analysis.py` (11), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (4) |
+| 9800 | `CONEW-N` | `tests/test_concurrency.py` (8), `tests/test_conew_booking.py` (3), `tests/test_disposition_analysis.py` (11), `tests/test_retry.py` (40), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (5) |
 | 9807 | `CRLIST-N` | `tests/test_crlist_listing.py` (2), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (3) |
 | 9857 | `CRLIST-N` | `tests/test_crlist_listing.py` (3), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (2) |
-| 9902 | `CONEW-N` | `tests/test_concurrency.py` (4), `tests/test_conew_booking.py` (11), `tests/test_disposition_analysis.py` (1), `tests/test_source_conformance.py` (7) | `tests/harness/natural_model.py` (3) |
-| 9904 | `CONEW-N` | `tests/test_conew_booking.py` (6), `tests/test_disposition_analysis.py` (12), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (3) |
-| 9905 | `CONEW-N` | `tests/test_conew_booking.py` (5), `tests/test_disposition_analysis.py` (6), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (3) |
-| 9918 | `CONEW-N` | `tests/test_conew_booking.py` (5), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (3) |
+| 9902 | `CONEW-N` | `tests/test_concurrency.py` (4), `tests/test_conew_booking.py` (11), `tests/test_disposition_analysis.py` (1), `tests/test_retry.py` (31), `tests/test_source_conformance.py` (7) | `tests/harness/natural_model.py` (10) |
+| 9904 | `CONEW-N` | `tests/test_conew_booking.py` (6), `tests/test_disposition_analysis.py` (12), `tests/test_retry.py` (1), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (4) |
+| 9905 | `CONEW-N` | `tests/test_conew_booking.py` (5), `tests/test_disposition_analysis.py` (6), `tests/test_retry.py` (1), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (4) |
+| 9918 | `CONEW-N` | `tests/test_conew_booking.py` (5), `tests/test_retry.py` (5), `tests/test_source_conformance.py` (1) | `tests/harness/natural_model.py` (4) |
 | 9923 | `CUGET-N` | none (harness needed) | none |
 | 9924 | `CUGET-N`, `CUMOD-N` | `tests/test_disposition_analysis.py` (4) | none |
 | 9934 | `CRGET-N`, `CUMOD-N` | none (harness needed) | none |
-| 9999 | `CONEW-N`, `CRLIST-N`, `CUGET-N`, `CUMOD-N`, `CUNEW-N` | `tests/test_disposition_analysis.py` (6), `tests/test_source_conformance.py` (2) | none |
+| 9999 | `CONEW-N`, `CRLIST-N`, `CUGET-N`, `CUMOD-N`, `CUNEW-N` | `tests/test_disposition_analysis.py` (6), `tests/test_retry.py` (4), `tests/test_source_conformance.py` (2) | none |
 <!-- /generated:code-test-coverage -->
 
 ## Coverage summary (generated from the tables above)

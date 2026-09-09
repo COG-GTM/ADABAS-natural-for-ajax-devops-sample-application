@@ -40,8 +40,8 @@ Seven requirements (REQ-I-001 – REQ-I-007) exist because the concurrency refac
 
 | Requirement | Sample defect it prevents | Executable proof today | What the target must do |
 |---|---|---|---|
-| REQ-I-001 Capacity is decremented atomically under contention | Two users each read one remaining place and both book it (`tests/test_concurrency.py:24-45`) | `tests/test_concurrency.py:68-97`, `tests/test_concurrency.py:129-141` | Read-check-decrement under a lock or with a conditional update; never a negative balance |
-| REQ-I-002 Booking identifiers are unique under contention | Two users each read MAX=1000 and both store 1001 (`tests/test_concurrency.py:46-66`) | `tests/test_concurrency.py:99-127` | Platform-generated identifiers; the MAX+1 idiom is not carried |
+| REQ-I-001 Capacity is decremented atomically under contention | Two users each read one remaining place and both book it (`tests/test_concurrency.py:24-45`) | `tests/test_concurrency.py:68-97`, `tests/test_concurrency.py:129-141`; target-state models (bounded re-drive, hold-queue wait, guarded update, atomic conditional decrement): `tests/test_retry.py:86-102`, `tests/test_retry.py:120-141`, `tests/test_retry.py:295-316`, `tests/test_retry.py:582-590` | Read-check-decrement under a lock or with a conditional update; never a negative balance; a wait or retry that cannot be satisfied ends in a defined outcome, never a hang (`../../docs/retry-rearchitecture.md`) |
+| REQ-I-002 Booking identifiers are unique under contention | Two users each read MAX=1000 and both store 1001 (`tests/test_concurrency.py:46-66`) | `tests/test_concurrency.py:99-127`; under retry and with a platform-generated identifier: `tests/test_retry.py:156-172`, `tests/test_retry.py:592-608` | Platform-generated identifiers; the MAX+1 idiom is not carried |
 
 Pay-run analogy: an entitlement balance read, decided on and written back without a lock is the same defect; a sequence number computed from the highest existing value is the same defect.
 
